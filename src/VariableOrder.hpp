@@ -217,7 +217,7 @@ class VariableOrder {
   }
 
   void collectGarbidge() {
-    std::erase_if(references_, &decltype(references_)::value_type::expired);
+    std::erase_if(references_, [](auto&& ref){return ref.expired();});
 
     std::ranges::sort(references_, std::owner_less{});
     const auto unique_deleter{
