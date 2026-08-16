@@ -16,6 +16,10 @@
  *
  * @tparam T  Concrete derived diagram type (used for CRTP).
  * @tparam Term Term type that describes the variable/leaf semantics.
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
  */
 
 #include <cstdio>

@@ -15,6 +15,10 @@
  * selectors for arithmetic diagrams.
  *
  * @tparam Term  The term type (e.g. LinearTerm or SmtTerm).
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
  */
 
 #include <iostream>

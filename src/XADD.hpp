@@ -15,6 +15,10 @@
  * variables and arithmetic operations.  The implementation is templated but
  * currently instantiated for @p expression::LinearTerm and @p
  * expression::SmtTerm.
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
  */
 
 #include <stdexcept>
