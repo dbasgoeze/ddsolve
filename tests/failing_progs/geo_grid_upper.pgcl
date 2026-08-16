@@ -1,0 +1,18 @@
+// wp == 3193772807942888/140737488355328
+const bound = 25;
+const a_bound = bound;
+const b_bound = bound;
+s = 1;
+a = 0;
+b = 0;
+
+@unroll(200)
+while (s == 1) {
+    {a = a + 1}[1/2]{b = b + 1}
+    {}[1/2]{
+        if (!(a < a_bound & b < b_bound)) {
+            s = 0
+        }
+    }
+}
+// a

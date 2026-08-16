@@ -1,0 +1,19 @@
+[build-system]
+requires = ["scikit-build-core"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "ddsolve"
+version = "0.0.1"
+dependencies = ["lark", "tqdm"]
+
+[project.scripts]
+ddsolve = "ddsolve.cli:main"
+
+[tool.scikit-build]
+wheel.packages = []
+wheel.py-api = "cp312"
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+SMT_SOLVER = "CVC5"

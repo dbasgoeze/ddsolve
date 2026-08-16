@@ -1,0 +1,103 @@
+CALCULUS: "wp" | "wlp" | "awp" | "awlp" | "cwp" | "aert" | "ert" | "aett" | "ett"
+COMPERATOR: "<" | "<=" | ">" | ">=" | "==" | "!="
+TYPENAME.2: "int" | "real"
+BOOL_CONST: "true" | "false"
+
+start: calculus_annotation statements _expectation_annotation
+
+calculus_annotation: "//" CALCULUS COMPERATOR _expectation
+
+_expectation_annotation: "//" _expectation
+
+statements: ((_statement_looplike ";"?) | (_statement_assignlike ";"))* _statement_assignlike?
+_statement_looplike: if_ | _while_ | prob_choice | nd_choice
+_statement_assignlike: _decl | _assignments | assert | tick | print
+
+print: "print"
+
+_decl: variable_decl | array_decl | function_decl
+array_decl: TYPENAME "[" "]" CNAME
+variable_decl: TYPENAME CNAME
+function_decl: "func" TYPENAME CNAME "(" INT ")"
+
+_assignments: uniform_assign | full_array_assign | array_assign | assign
+full_array_assign: term_array "[" "]" ("=" | ":=") term_array
+array_assign: term_array "[" _term "]" ("=" | ":=") _term
+assign: term_variable ("=" | ":=") _term
+uniform_assign: term_variable "~=" "uniform" "(" INT "," INT ")"
+
+if_: "if" "(" _bool ")" _body ("else" _body)?
+_body: "{" statements "}"
+assert: "assert" "(" _comparison ")"
+prob_choice: _body  "[" _term "]" _body
+nd_choice: _body  "[" "]" _body
+tick: "tick" "(" _expectation ")"
+
+_while_: while_kinduction | while_unroll
+while_kinduction: "@kinduction" "(" _expectation ["," INT ["," INT]] ")" _while_loop
+while_unroll: ("@unroll"|"@fixpoint") ["(" INT ")"]  _while_loop
+_while_loop: "while" "(" _bool ")" _body
+
+_expectation: expectation_term | expectation_ite
+expectation_term: _term
+expectation_ite: "ite" "(" _bool "," _expectation "," _expectation ")"
+
+
+_bool: _bool_qf
+_bool_qf: _bool_disj | bool_finite_forall
+_bool_disj: _bool_conj | bool_or
+_bool_conj: _bool_atom | bool_and
+bool_or: _bool_conj "|" _bool_disj
+bool_and: _bool_atom "&" _bool_conj
+bool_finite_forall: "forall" term_variable "in" "[" INT "," INT "]" ":" _bool_qf
+
+_bool_atom: bool_comparison | bool_ite | bool_const | bool_negation | "(" _bool ")"
+bool_negation: "!" _bool_atom
+bool_comparison: _comparison
+_comparison: comparison_base | _comparison_formula
+comparison_base: _term COMPERATOR _term
+
+_comparison_formula: "<<" _comparison_qf ">>"
+_comparison_qf: _comparison_disj | | _comparison_forall
+_comparison_disj: _comparison_conj | comparison_or
+_comparison_conj: _comparison_atom | comparison_and
+_comparison_atom: comparison_base | comparison_negation | "(" _comparison_qf ")"
+_comparison_forall: comparison_finite_forall | comparison_forall_ints | comparison_forall_reals
+comparison_negation: "!" _comparison_atom
+comparison_or: _comparison_conj "|" _comparison_disj
+comparison_and: _comparison_atom "&" _comparison_conj
+comparison_finite_forall: "forall" term_variable "in" "[" INT "," INT "]" ":" _comparison_qf
+comparison_forall_ints: "forall" term_variable "in" ("ints" | "Ints" | "Z") ":" _comparison_qf
+comparison_forall_reals: "forall" term_variable "in" ("reals" | "Reals" | "R") ":" _comparison_qf
+
+
+bool_ite: "ite" "(" _bool "," _bool "," _bool ")"
+bool_const: BOOL_CONST
+
+_term: _term_sum | term_to_int | term_to_real
+_term_sum: _term_prod | term_add | term_sub
+term_add: _term_sum "+" _term_prod
+term_sub: _term_sum "-" _term_prod
+_term_prod: _term_atom | term_mul | term_div
+term_mul: _term_prod "*" _term_atom
+term_div: _term_prod "/" _term_atom
+_term_atom: _term_const | term_array_select | term_variable | "(" _term ")" | term_function_call
+term_function_call: term_function "(" (_term ("," _term)*)? ")"
+term_function: CNAME
+term_array_select: term_array "[" _term "]"
+term_array: CNAME
+term_variable: CNAME
+_term_const: term_int
+term_int: INT
+
+term_to_int: "to_real" "(" _term ")"
+term_to_real: "to_int" "(" _term ")"
+
+%import common.CNAME
+%import common.INT
+%import common.SIGNED_INT
+%import common.WS
+%import common.SH_COMMENT
+
+%ignore WS
+%ignore SH_COMMENT

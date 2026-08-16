@@ -1,0 +1,7 @@
+// wp == 19/5
+x ~= uniform(1,6);
+y ~= uniform(1,6);
+if (x < y) {
+  x = y
+}
+// x

@@ -1,0 +1,96 @@
+start: calculus_annotation statements expectation_annotation
+
+calculus_annotation: "//" CALCULUS COMPERATOR _expectation_maybe_pair
+CALCULUS: "wp" | "wlp" | "awp" | "awlp" | "cwp" | "aert" | "ert" | "aett" | "ett"
+
+statements: _statement
+_statement: if_ ";"? _statement?
+    | while_ ";"? _statement?
+    | prob_choice ";"? _statement?
+    | nd_choice ";"? _statement?
+    | assign  (";" | ";" _statement)?
+    | sample  (";" | ";" _statement)?
+    | observe (";" | ";" _statement)?
+    | tick (";" | ";" _statement)?
+    | diverge ";"?
+
+tick: "tick" | "tick" "(" "1" ")"
+diverge: "diverge"
+if_: "if" "(" _bool_expr ")" body else_?
+else_: "else" body
+while_: _loop_annotation "while" "(" _bool_expr ")" body
+
+_loop_annotation: "@" (loop_annotation_unroll | loop_annotation_fixpoint | loop_annotation_kinduction)
+loop_annotation_unroll: "unroll" "(" INT ")"
+loop_annotation_fixpoint: "fixpoint"
+loop_annotation_kinduction: "kinduction" "(" _expectation_maybe_pair ["," INT ["," INT]] ")"
+
+prob_choice: body "[" probability "]" body
+nd_choice: body "[" "]" body
+
+probability: rational
+rational: SIGNED_INT ( "/" INT )?
+
+body: "{" statements? "}"
+assign: CONST? identifier ("=" | ":=") _term
+CONST: "const"
+identifier: CNAME
+
+sample: identifier "~=" _distribution
+_distribution: distribution_uniform | distribution_explicit
+distribution_uniform: "uniform" "(" INT "," INT  ")"
+distribution_explicit: "[" distribution_explicit_tuple ("," distribution_explicit_tuple)* "]"
+distribution_explicit_tuple: "(" probability "," INT ")"
+
+_term: term_base | term_mul |  term_plus | term_minus
+term_mul: [SIGNED_INT "*"] "(" _term ")"
+term_plus: _term "+" _term
+term_minus: _term "-" _term
+term_base: [SIGNED_INT "*"] identifier | SIGNED_INT
+_bool_expr: bool_expr_base | "(" _bool_expr ")" | bool_expr_not | bool_expr_and | bool_expr_or | bool_expr_ite
+bool_expr_not: "!" _bool_expr
+bool_expr_and: _bool_expr "&" _bool_expr
+bool_expr_or: _bool_expr "|" _bool_expr
+bool_expr_ite: "ite" "(" _bool_expr "," _bool_expr "," _bool_expr ")"
+bool_expr_base: _term COMPERATOR _term
+
+_fterm: fterm_base | fterm_mul |  fterm_plus | fterm_minus
+fterm_mul: [rational "*"] "(" _fterm ")"
+fterm_plus: _fterm "+" _fterm
+fterm_minus: _fterm "-" _fterm
+fterm_base: [rational "*"] identifier | rational
+_fbool_expr: fbool_expr_base | "(" _fbool_expr ")" | fbool_expr_not | fbool_expr_and | fbool_expr_or | fbool_expr_ite
+fbool_expr_not: "!" _fbool_expr
+fbool_expr_and: _fbool_expr "&" _fbool_expr
+fbool_expr_or: _fbool_expr "|" _fbool_expr
+fbool_expr_ite: "ite" "(" _fbool_expr "," _fbool_expr "," _fbool_expr ")"
+fbool_expr_base: _fterm COMPERATOR _fterm
+
+expectation_annotation: "//" _expectation_maybe_pair
+
+_expectation_maybe_pair: _expectation | expectation_pair
+expectation_pair: "(" _expectation "," _expectation ")"
+
+_expectation: expectation_infty | _finite_expectation
+_finite_expectation: "(" _finite_expectation ")" | expectation_base | expectation_ite | expectation_mul | expectation_add | expectation_sub
+expectation_base: identifier | rational
+expectation_infty: "infty" | "(" expectation_infty ")"
+expectation_ite: "ite" "(" _fbool_expr "," _expectation "," _expectation ")"
+expectation_mul: rational "*" _finite_expectation
+expectation_add: _finite_expectation "+" _finite_expectation
+expectation_sub: _finite_expectation "-" _finite_expectation
+
+observe: "observe" "(" _fbool_expr  ")"
+
+
+COMPERATOR: "<" | "<=" | ">" | ">=" | "==" | "!="
+
+
+%import common.CNAME
+%import common.INT
+%import common.SIGNED_INT
+%import common.WS
+%import common.SH_COMMENT
+
+%ignore WS
+%ignore SH_COMMENT

@@ -1,0 +1,4 @@
+// wp == 2/5
+x ~= uniform(1,6);
+y ~= uniform(1,6)
+// ite(x < y, 1, 0)

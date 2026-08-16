@@ -1,0 +1,12 @@
+#cmakedefine USE_SMTTERM_CACHE
+#cmakedefine USE_INCREMENTAL_SMT
+#cmakedefine SMT_DEBUG
+
+#define CVC5 1
+#define Z3 2
+
+#cmakedefine SMT_SOLVER @SMT_SOLVER@
+
+#cmakedefine MEASURE_SMT
+// #define MEASURE_SMT_MAX_THREADS 128
+#cmakedefine MEASURE_SMT_MAX_THREADS @MEASURE_SMT_MAX_THREADS@

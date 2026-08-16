@@ -1,0 +1,12 @@
+// wp == 3646122674008328775505908462875/79228162514264337593543950336
+a = 0;
+b = 0;
+const bound = 50;
+const a_bound = bound;
+const b_bound = bound;
+
+@unroll(101)
+while (a < a_bound & b < b_bound) {
+    {a = a + 1}[1/2]{b = b + 1}
+}
+// a

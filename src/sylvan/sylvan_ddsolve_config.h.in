@@ -1,0 +1,5 @@
+#cmakedefine NO_SCALE_CACHE
+#cmakedefine NO_MINMAX_GATHER_CACHE
+#cmakedefine NO_MINMAX_TRANSFORM_CACHE
+#cmakedefine REAL_PRUNEING
+#cmakedefine DO_PRUNE

@@ -1,0 +1,41 @@
+start: _expr
+
+_expr: "(" _expr ")" | pair | ident | if_ | let_ | flip | _op | observe | discrete | int | not_
+
+not_: "!" _expr
+
+pair: "(" _expr "," _expr ")"
+
+int: "int" "(" _INT "," INT ")"
+
+_INT: INT
+
+discrete: "discrete" "(" prob ("," prob)* ")"
+
+ident: CNAME
+
+if_: "if" _expr "then" _expr "else" _expr
+let_: "let" ident "=" _expr "in" _expr
+
+_op: arith_op | bin_op | comp_op
+
+arith_op: _expr OP _expr
+bin_op: _expr BINOP _expr
+comp_op: _expr COMP _expr
+
+OP: "+" | "-"
+COMP: "<" | "<=" | "==" | ">=" | ">"
+BINOP: "&&" | "||"
+
+flip: "flip" prob
+prob: PROB
+PROB: "1" ("." "0"*)? | "0" ("." INT?)? | "." INT
+
+observe: "observe" _expr
+
+
+%import common.CNAME
+%import common.INT
+%import common.SIGNED_INT
+%import common.WS
+%ignore WS

@@ -1,0 +1,9 @@
+[submodule "third_party/nanobind"]
+	path = third_party/nanobind
+	url = https://github.com/wjakob/nanobind
+[submodule "third_party/sylvan"]
+	path = third_party/sylvan
+	url = https://github.com/trolando/sylvan.git
+[submodule "third_party/lace"]
+	path = third_party/lace
+	url = https://github.com/trolando/lace.git
