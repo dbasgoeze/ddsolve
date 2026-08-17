@@ -15,7 +15,7 @@ import importlib.util
 # Project metadata
 # ---------------------------------------------------------------------------
 project = "ddsolve"
-copyright = "2025, ddsolve contributors"
+copyright = "2025-2026, Daniel Basgöze"
 
 # ---------------------------------------------------------------------------
 # Stub loading – inject ddsolve._ddsolve from .pyi before any imports
