@@ -48,6 +48,14 @@ set_property(TARGET ddsolve_obj PROPERTY POSITION_INDEPENDENT_CODE TRUE)
 
 nanobind_add_module(_ddsolve NOMINSIZE $<TARGET_OBJECTS:ddsolve_obj> src/main.cpp)
 nanobind_add_stub(_ddsolve_stub MODULE _ddsolve OUTPUT _ddsolve.pyi PYTHON_PATH "." DEPENDS _ddsolve)
+
+if(NOT SKBUILD)
+    add_custom_command(TARGET _ddsolve_stub POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_BINARY_DIR}/_ddsolve.pyi
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/ddsolve/_ddsolve.pyi
+    )
+endif()
 target_link_libraries(_ddsolve PUBLIC sylvan::sylvan gmpxx xxhash ${SMT_LIBS})
 target_include_directories(_ddsolve PUBLIC src/)
 set_property(TARGET _ddsolve PROPERTY CXX_STANDARD 23)
