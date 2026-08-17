@@ -29,7 +29,6 @@ copyright = "2025, ddsolve contributors"
 # before it is defined).
 # ---------------------------------------------------------------------------
 _stub_pyi = Path(__file__).parent.parent / "src" / "ddsolve" / "_ddsolve.pyi"
-_stub_py = Path(__file__).parent.parent / "src" / "ddsolve" / "_ddsolve_stub.py"
 
 with open(_stub_pyi) as f:
     _pyi_content = f.read()
@@ -40,18 +39,14 @@ _pyi_content = _pyi_content.replace(
     '"Any"'
 )
 
-with open(_stub_py, "w") as f:
-    f.write("from __future__ import annotations\n")
-    f.write(_pyi_content)
+_pyi_content = "from __future__ import annotations\n" + _pyi_content
 
-_spec = importlib.util.spec_from_file_location(
-    "ddsolve._ddsolve", str(_stub_py)
-)
-_stub_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_stub_mod)
+_stub_mod = type(sys)("ddsolve._ddsolve")
+_stub_mod.__file__ = str(_stub_pyi)
+_stub_mod.__loader__ = None
+_stub_mod.__package__ = "ddsolve"
+exec(_pyi_content, _stub_mod.__dict__)
 sys.modules["ddsolve._ddsolve"] = _stub_mod
-
-_stub_py.unlink()
 
 # ---------------------------------------------------------------------------
 # Theme
