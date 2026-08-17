@@ -1,0 +1,14 @@
+# Doxygen configuration for XML-only output
+
+PROJECT_NAME           = "ddsolve"
+OUTPUT_DIRECTORY       = ../doxygen
+GENERATE_HTML          = NO
+GENERATE_XML           = YES
+INPUT                  = ../src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.h *.cpp *.c
+EXCLUDE                = ../src/ddsolve ../src/ddsolve/__pycache__
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
