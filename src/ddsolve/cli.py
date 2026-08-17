@@ -1,3 +1,5 @@
+"""Command-line interface for the ddsolve probabilistic program verifier."""
+
 import argparse
 from sys import exit, setrecursionlimit
 from pathlib import Path
@@ -5,6 +7,20 @@ from pathlib import Path
 from ddsolve._ddsolve import VariableOrder, XADD, SmtXADD
 
 setrecursionlimit(10000000)
+
+
+def main():
+    """Parse command-line arguments and execute the verifier in the selected mode.
+
+    Supports three modes:
+        - pgcl: Linear term PGCL mode (default)
+        - smt: SMT term PGCL mode
+        - dice: Dice mode
+
+    Raises:
+        SystemExit: Exits with code 0 if verification succeeds, 1 if it fails,
+            or 2 if an unknown mode is specified.
+    """
 
 def main():
     arg_parser = argparse.ArgumentParser(
