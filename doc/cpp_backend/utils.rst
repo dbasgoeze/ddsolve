@@ -1,7 +1,11 @@
 Utilities
 =========
 
-Hash utilities, indirect references, and merge views.
+Hash utilities, indirect references, and merge views for generic programming
+support within the C++ backend.
+
+Indirection Types
+-----------------
 
 .. doxygenstruct:: ddsolve::indirection
    :project: ddsolve
@@ -18,6 +22,9 @@ Hash utilities, indirect references, and merge views.
    :members:
    :undoc-members:
 
+Hash Functions
+--------------
+
 .. doxygenstruct:: ddsolve::IndirectHash
    :project: ddsolve
 
@@ -29,6 +36,9 @@ Hash utilities, indirect references, and merge views.
    :members:
    :undoc-members:
 
+Hash Concepts
+~~~~~~~~~~~~~
+
 .. doxygenconcept:: ddsolve::Hashable
    :project: ddsolve
 
@@ -37,6 +47,9 @@ Hash utilities, indirect references, and merge views.
 
 .. doxygenconcept:: ddsolve::StdHashable
    :project: ddsolve
+
+Merge Views
+-----------
 
 .. doxygenclass:: ddsolve::views::MergeIterator
    :project: ddsolve

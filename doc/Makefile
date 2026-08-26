@@ -1,8 +1,9 @@
 UV = uv
 
-.PHONY: all clean serve doxygen html
+.PHONY: all clean serve docs doxygen html
 
 DOXYDIR  = ../doxygen
+BUILD_DIR = _build/html
 
 doxygen:
 	@mkdir -p $(DOXYDIR)/xml
@@ -11,13 +12,15 @@ doxygen:
 html: doxygen
 	rm -rf .venv
 	$(UV) venv .venv
-	$(UV) pip install sphinx breathe sphinx-autodoc-typehints lark tqdm furo
-	.venv/bin/sphinx-build -b html . _build/html
+	$(UV) pip install -r requirements.txt
+	.venv/bin/sphinx-build -b html . $(BUILD_DIR)
+
+docs: html
 
 clean:
 	rm -rf _build $(DOXYDIR) .venv
 
 serve: html
-	python3 -m http.server --directory _build/html 8000
+	python3 -m http.server --directory $(BUILD_DIR) 8000
 
 all: html

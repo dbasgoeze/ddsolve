@@ -1,0 +1,6 @@
+sphinx>=8
+breathe
+sphinx-autodoc-typehints
+furo
+lark
+tqdm

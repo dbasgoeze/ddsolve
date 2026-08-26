@@ -16,6 +16,8 @@ import importlib.util
 # ---------------------------------------------------------------------------
 project = "ddsolve"
 copyright = "2025-2026, Daniel Basgöze"
+html_title = "ddsolve Documentation"
+html_last_updated_fmt = "%b %d, %Y"
 
 # ---------------------------------------------------------------------------
 # Stub loading – inject ddsolve._ddsolve from .pyi before any imports
@@ -67,8 +69,16 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
 ]
+
+# ---------------------------------------------------------------------------
+# Intersphinx – external documentation links
+# ---------------------------------------------------------------------------
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}
 
 # ---------------------------------------------------------------------------
 # Breathe configuration – Doxygen XML output from C++ headers
@@ -77,12 +87,19 @@ breathe_projects = {
     "ddsolve": "../doxygen/xml",
 }
 breathe_default_project = "ddsolve"
+breathe_default_members = ["members", "undoc-members"]
+breathe_domain_by_extension = {
+    ".hpp": "cpp",
+    ".h": "cpp",
+    ".cpp": "cpp",
+}
 
 # ---------------------------------------------------------------------------
 # Napoleon configuration – Google-style docstring support
 # ---------------------------------------------------------------------------
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
+napoleon_include_init_with_doc = True
 
 # ---------------------------------------------------------------------------
 # Autodoc defaults
@@ -92,3 +109,60 @@ autodoc_default_options = {
     "undoc-members": True,
     "show-inheritance": True,
 }
+
+# ---------------------------------------------------------------------------
+# Autodoc type hints
+# ---------------------------------------------------------------------------
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented"
+
+# ---------------------------------------------------------------------------
+# Nitpicky mode – warn about all broken cross-references
+# ---------------------------------------------------------------------------
+nitpicky = True
+nitpick_ignore = [
+    ("cpp:type", "std::string"),
+    ("cpp:type", "std::ostream"),
+    ("cpp:type", "std::istream"),
+    ("cpp:type", "std::function"),
+    ("cpp:type", "std::shared_ptr"),
+    ("cpp:type", "std::optional"),
+    ("cpp:type", "std::variant"),
+    ("cpp:type", "std::vector"),
+    ("cpp:type", "std::pair"),
+    ("cpp:type", "std::size_t"),
+    ("cpp:type", "std::uint32_t"),
+    ("cpp:type", "std::uint64_t"),
+    ("cpp:type", "std::int32_t"),
+    ("cpp:type", "std::int64_t"),
+    ("cpp:type", "std::span"),
+    ("cpp:type", "ddsolve::gsl::not_null"),
+    ("cpp:type", "ddsolve::gsl::span"),
+    ("cpp:type", "ddsolve::gsl::index"),
+    ("cpp:type", "ddsolve::gsl::owner"),
+    ("cpp:type", "ddsolve::smt::SmtWrapper"),
+    ("cpp:type", "ddsolve::views::MergeView"),
+    ("cpp:type", "ddsolve::views::MergeIterator"),
+    ("cpp:type", "ddsolve::ArithmeticTypes"),
+    ("cpp:type", "VariableId"),
+    ("cpp:type", "sylvan"),
+    ("cpp:type", "sylvan::Mtbdd"),
+    ("cpp:type", "SylvanVariable"),
+    ("cpp:type", "Z3Expression"),
+    ("cpp:type", "cvc5"),
+    ("cpp:type", "cvc5::Term"),
+    ("cpp:type", "mpq_class"),
+    ("cpp:type", "uint8_t"),
+    ("py:class", "ddsolve._ddsolve"),
+    ("py:class", "lark.visitors.Interpreter"),
+    ("py:class", "lark.visitors.Transformer"),
+    ("py:class", "lark.visitors.Visitor"),
+]
+
+# ---------------------------------------------------------------------------
+# Suppress noisy warnings
+# ---------------------------------------------------------------------------
+suppress_warnings = [
+    "exhaustivedocstring",
+    "breathe.default_project",
+]
