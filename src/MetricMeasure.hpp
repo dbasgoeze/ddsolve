@@ -99,7 +99,8 @@ class MetricMeasure {
    * @brief Print all recorded intervals to stdout.
    *
    * Outputs each thread's intervals as space-separated values.
-   * Format: `<thread_id> <nanoseconds>` or `<thread_id> <seconds><nanoseconds>`.
+   * Format: `<thread_id> <nanoseconds>` or `<thread_id>
+   * <seconds><nanoseconds>`.
    *
    * @note This method is not thread-safe and should only be called from
    *       a single thread after all measurement threads have finished.

@@ -81,7 +81,7 @@ constexpr SmtResult flip(const SmtResult result) {
  * @return A human-readable string: "Sat", "Unsat", or "Unknown".
  */
 constexpr std::string smtResultToStr(const SmtResult result) {
-  switch(result) {
+  switch (result) {
     case SmtResult::kUnsat:
       return "Unsat";
     case SmtResult::kSat:

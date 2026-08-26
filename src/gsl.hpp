@@ -29,6 +29,6 @@ namespace gsl {
  */
 template <typename T, typename = std::enable_if_t<std::is_pointer_v<T>>>
 using owner = T;
-}
+}  // namespace gsl
 
 #endif /* GSL_HPP */
