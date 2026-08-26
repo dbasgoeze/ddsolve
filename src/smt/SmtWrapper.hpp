@@ -1,3 +1,17 @@
+/**
+ * @file SmtWrapper.hpp
+ * @brief SMT wrapper concept and type aliases for the selected solver.
+ *
+ * This header defines the SmtWrapper C++20 concept that constrains the
+ * interface expected of SMT solver backends (CVC5 or Z3).  It also provides
+ * type aliases (RealValuedWrapper, IntValuedWrapper) that resolve to the
+ * concrete wrapper type based on the SMT_SOLVER compile-time configuration.
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
+ */
+
 #include <concepts>
 #include <type_traits>
 
@@ -14,6 +28,14 @@
 
 namespace ddsolve::smt {
 
+/**
+ * @brief Concept constraining SMT solver backend wrappers.
+ *
+ * Types satisfying this concept must provide expression types, factory
+ * methods for arithmetic operations (sums, products, negation), comparison
+ * construction, boolean constants, solver interaction (assertions, push/pop,
+ * check-sat), and value retrieval.
+ */
 template <typename Wrapper>
 concept SmtWrapper =
     requires { typename Wrapper::Expression; } &&
@@ -63,12 +85,36 @@ concept SmtWrapper =
     };
 
 #if SMT_SOLVER == CVC5
+/**
+ * @brief Alias for the real-valued SMT solver wrapper (CVC5).
+ *
+ * Resolves to `Cvc5Wrapper<true>`, the CVC5 backend configured for
+ * real-number arithmetic.
+ */
 using RealValuedWrapper = Cvc5Wrapper<true>;
+/**
+ * @brief Alias for the integer-valued SMT solver wrapper (CVC5).
+ *
+ * Resolves to `Cvc5Wrapper<false>`, the CVC5 backend configured for
+ * integer arithmetic.
+ */
 using IntValuedWrapper = Cvc5Wrapper<false>;
 #endif
 
 #if SMT_SOLVER == Z3
+/**
+ * @brief Alias for the real-valued SMT solver wrapper (Z3).
+ *
+ * Resolves to `Z3Wrapper<true>`, the Z3 backend configured for
+ * real-number arithmetic.
+ */
 using RealValuedWrapper = Z3Wrapper<true>;
+/**
+ * @brief Alias for the integer-valued SMT solver wrapper (Z3).
+ *
+ * Resolves to `Z3Wrapper<false>`, the Z3 backend configured for
+ * integer arithmetic.
+ */
 using IntValuedWrapper = Z3Wrapper<false>;
 #endif
 

@@ -1,3 +1,18 @@
+/**
+ * @file main.cpp
+ * @brief Python bindings for the decision diagram solver.
+ *
+ * This file defines the nanobind module that exposes the core solver
+ * functionality to Python.  It registers classes for LinearTerm, SmtTerm,
+ * LinearComparison, SmtComparison, VariableOrder, XBDD, and XADD along with
+ * their operators and factory methods.  Sylvan is initialised at module load
+ * time and cleaned up via an atexit handler.
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
+ */
+
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
@@ -27,26 +42,57 @@
 // }
 
 namespace {
+
+/**
+ * @brief RAII manager for Sylvan's Lace threading library.
+ *
+ * Resumes Lace on enter (acquiring a thread) and suspends it on exit
+ * (releasing the thread).  This allows safe interaction with Sylvan
+ * from Python code that may run without the GIL.
+ */
 struct LaceManager {
+  /**
+   * @brief Resume Lace, acquiring a thread for use.
+   */
   static void enter() {
     lace_resume();
   }
 
+  /**
+   * @brief Suspend Lace, releasing the current thread.
+   */
   static void exit() {
     lace_suspend();
   }
 };
 
+/**
+ * @brief RAII manager for enabling/disabling model printing.
+ *
+ * Enables printing of solver models on enter and disables it on exit.
+ */
 struct PrintModelsManager {
+  /**
+   * @brief Enable model printing.
+   */
   static void enter() {
     ddsolve::interface::printModels(true);
   }
 
+  /**
+   * @brief Disable model printing.
+   */
   static void exit() {
     ddsolve::interface::printModels(false);
   }
 };
 
+/**
+ * @brief Clean up Sylvan resources when the module is unloaded.
+ *
+ * Reports Sylvan statistics to stderr, then gracefully shuts down
+ * ddsolve, Sylvan, and Lace.  Called via Python's atexit mechanism.
+ */
 void cleanup() noexcept {
   nanobind::gil_scoped_release guard{};
 
@@ -58,8 +104,14 @@ void cleanup() noexcept {
   lace_stop();
 }
 
-std::string_view getEnvironmentVariable(const char *env_var) {
-  const auto *env{std::getenv(env_var)};
+/**
+ * @brief Retrieve the value of an environment variable.
+ * @param env_var  The name of the environment variable.
+ * @return The value as a string view, or an empty string view if the
+ *         variable is not set.
+ */
+std::string_view getEnvironmentVariable(const char* env_var) {
+  const auto* env{std::getenv(env_var)};
 
   if (env != nullptr) {
     return env;
@@ -68,8 +120,14 @@ std::string_view getEnvironmentVariable(const char *env_var) {
   return {};
 }
 
+/**
+ * @brief Retrieve an environment variable as a 64-bit integer.
+ * @param env_var  The name of the environment variable.
+ * @param default_  The value to return if the variable is unset or invalid.
+ * @return The parsed integer value, or @p default_ on failure.
+ */
 // NOLINTNEXTLINE(google-runtime-int)
-int64_t getIntegerEnvironmentVariable(const char *env_var, long default_) {
+int64_t getIntegerEnvironmentVariable(const char* env_var, long default_) {
   constexpr auto kbase{10};
   const auto str{getEnvironmentVariable(env_var)};
 
@@ -133,34 +191,34 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
   nanobind::class_<LaceManager>(m, "LaceManager")
       .def(nanobind::init<>())
       .def_static("__enter__", &LaceManager::enter)
-      .def_static("__exit__", [](nanobind::args &) { LaceManager::exit(); });
+      .def_static("__exit__", [](nanobind::args&) { LaceManager::exit(); });
 
   nanobind::class_<PrintModelsManager>(m, "PrintModelsManager")
       .def(nanobind::init<>())
       .def_static("__enter__", &PrintModelsManager::enter)
       .def_static("__exit__",
-                  [](nanobind::args &) { PrintModelsManager::exit(); });
+                  [](nanobind::args&) { PrintModelsManager::exit(); });
 
   nanobind::class_<ddsolve::expression::Product>(m, "Product")
       .def(nanobind::init<ddsolve::expression::VariableId, int>())
       .def("__init__",
-           [](ddsolve::expression::Product *product,
-              const ddsolve::expression::VariableId &var,
-              const std::string &str) {
+           [](ddsolve::expression::Product* product,
+              const ddsolve::expression::VariableId& var,
+              const std::string& str) {
              new (product) ddsolve::expression::Product(
                  var,
                  ddsolve::expression::LinearTerm::coefficientFromString(str));
            })
       .def("__repr__",
-           [](const std::shared_ptr<const ddsolve::expression::Product> &prod) {
+           [](const std::shared_ptr<const ddsolve::expression::Product>& prod) {
              return ddsolve::expression::LinearTerm{{*prod}}.str();
            })
       .def("get_variable",
-           [](const std::shared_ptr<const ddsolve::expression::Product> &prod) {
+           [](const std::shared_ptr<const ddsolve::expression::Product>& prod) {
              return prod->variable;
            })
       .def("get_coefficient",
-           [](const std::shared_ptr<const ddsolve::expression::Product> &prod) {
+           [](const std::shared_ptr<const ddsolve::expression::Product>& prod) {
              return prod->coefficent.get_str();
            });
 
@@ -178,15 +236,15 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
       .def("__repr__", &ddsolve::expression::LinearTerm::str)
       .def(
           "__iter__",
-          [](const ddsolve::expression::LinearTerm &term) {
+          [](const ddsolve::expression::LinearTerm& term) {
             return nanobind::make_iterator(
                 nanobind::type<ddsolve::expression::LinearTerm>(),
                 "ProductIterator", term.begin(), term.end());
           },
           nanobind::keep_alive<0, 1>())
       .def("scale",
-           [](const ddsolve::expression::LinearTerm &term,
-              const std::string &scalar) {
+           [](const ddsolve::expression::LinearTerm& term,
+              const std::string& scalar) {
              return ddsolve::expression::LinearTerm::scalarFromString(scalar) *
                     term;
            })
@@ -270,10 +328,10 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
                               &LinearXBDD::getSupport))
       .def("ite",
            static_cast<LinearXBDD (LinearXBDD::*)(
-               const LinearXBDD &, const LinearXBDD &) const>(&LinearXBDD::ite))
+               const LinearXBDD&, const LinearXBDD&) const>(&LinearXBDD::ite))
       .def("ite",
            static_cast<LinearXADD (LinearXBDD::*)(
-               const LinearXADD &, const LinearXADD &) const>(&LinearXBDD::ite))
+               const LinearXADD&, const LinearXADD&) const>(&LinearXBDD::ite))
       .def(nanobind::self == nanobind::self)
       .def(nanobind::self & nanobind::self)
       .def(nanobind::self | nanobind::self)
@@ -287,33 +345,32 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
       .def("get_undefined", &LinearXADD::getUndefined)
       .def(
           "get_infty",
-          [](const LinearXADD &dd) {
+          [](const LinearXADD& dd) {
             return dd.getTerm(std::make_shared<ddsolve::expression::LinearTerm>(
                 ddsolve::expression::FinityType::kPositiveInfinite));
           })
       .def(
           "get_neg_infty",
-          [](const LinearXADD &dd) {
+          [](const LinearXADD& dd) {
             return dd.getTerm(std::make_shared<ddsolve::expression::LinearTerm>(
                 ddsolve::expression::FinityType::kPositiveInfinite));
           })
       .def("get_zero",
-           [](const LinearXADD &dd) {
+           [](const LinearXADD& dd) {
              return dd.getTerm(
                  std::make_shared<ddsolve::expression::LinearTerm>());
            })
       .def(
           "get_one",
-          [](const LinearXADD &dd) {
+          [](const LinearXADD& dd) {
             return dd.getTerm(std::make_shared<ddsolve::expression::LinearTerm>(
                 std::vector<ddsolve::expression::Product>{
                     ddsolve::expression::Product{0, 1}}));
           })
-      .def(
-          "get_term",
-          static_cast<LinearXADD (LinearXADD::*)(
-              const ddsolve::expression::LinearTerm::ConstTermPointer &) const>(
-              &LinearXADD::getTerm))
+      .def("get_term",
+           static_cast<LinearXADD (LinearXADD::*)(
+               const ddsolve::expression::LinearTerm::ConstTermPointer&) const>(
+               &LinearXADD::getTerm))
       .def("get_term",
            static_cast<ddsolve::expression::LinearTerm::ConstTermPointer (
                LinearXADD::*)() const>(&LinearXADD::getTerm))
@@ -342,7 +399,7 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
       .def("undefined_to_zero", &LinearXADD::undefinedToZero)
       .def(
           "scale",
-          [](const LinearXADD &add, const std::string &scalar) {
+          [](const LinearXADD& add, const std::string& scalar) {
             const auto scalar_ptr{
                 std::make_shared<ddsolve::expression::LinearTerm::ScalarType>(
                     ddsolve::expression::LinearTerm::scalarFromString(scalar))};
@@ -443,9 +500,9 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
       .def("get_support",
            static_cast<SmtXBDD (SmtXBDD::*)() const>(&SmtXBDD::getSupport))
       .def("ite", static_cast<SmtXBDD (SmtXBDD::*)(
-                      const SmtXBDD &, const SmtXBDD &) const>(&SmtXBDD::ite))
+                      const SmtXBDD&, const SmtXBDD&) const>(&SmtXBDD::ite))
       .def("ite", static_cast<SmtXADD (SmtXBDD::*)(
-                      const SmtXADD &, const SmtXADD &) const>(&SmtXBDD::ite))
+                      const SmtXADD&, const SmtXADD&) const>(&SmtXBDD::ite))
       .def(nanobind::self == nanobind::self)
       .def(nanobind::self & nanobind::self)
       .def(nanobind::self | nanobind::self)
@@ -459,7 +516,7 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
       .def("get_undefined", &SmtXADD::getUndefined)
       .def("get_term",
            static_cast<SmtXADD (SmtXADD::*)(
-               const ddsolve::expression::SmtTerm::ConstTermPointer &) const>(
+               const ddsolve::expression::SmtTerm::ConstTermPointer&) const>(
                &SmtXADD::getTerm))
       .def("get_term",
            static_cast<ddsolve::expression::SmtTerm::ConstTermPointer (
@@ -488,7 +545,7 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
            nanobind::call_guard<nanobind::gil_scoped_release>{})
       .def("undefined_to_zero", &SmtXADD::undefinedToZero)
       .def("scale",
-           [](const SmtXADD &add, const std::string &scalar) {
+           [](const SmtXADD& add, const std::string& scalar) {
              const auto scalar_ptr{
                  std::make_shared<ddsolve::expression::SmtTerm::ScalarType>(
                      ddsolve::expression::SmtTerm::scalarFromString(scalar))};

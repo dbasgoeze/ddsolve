@@ -1,3 +1,20 @@
+/**
+ * @file SylvanInterface.cpp
+ * @brief Implementation of the Sylvan backend interface for decision diagram
+ * operations.
+ *
+ * This file implements the free-standing interface functions (add, sub, mul,
+ * div, scale, prune, compare, max, min, getTerm, etc.) that delegate to the
+ * Sylvan library.  It provides template specialisations for LinearTerm and
+ * SmtTerm, along with a MinMaxHelper that materialises term-pair comparisons
+ * as decision-diagram variables.  A C-compatible API is exposed via extern "C"
+ * for use by the Sylvan C code.
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
+ */
+
 #include "SylvanInterface.h"
 
 #include <atomic>
@@ -126,6 +143,14 @@ ddsolve::interface::SmtVariableOrderHandle toHandle(
       <const ddsolve::interface::SmtVariableOrderHandle>(ptr);
 }
 
+/**
+ * @brief Comparator for term pairs used in @p MinMaxHelper.
+ *
+ * Orders pairs lexicographically: first by the left term, then by the
+ * right term.  Used as the key comparator in the term-pair set.
+ *
+ * @tparam Term  The term type (LinearTerm or SmtTerm).
+ */
 template <typename Term>
 struct TermPairCompare {
   using TermPair = std::pair<typename Term::ConstTermPointer,
@@ -137,6 +162,16 @@ struct TermPairCompare {
   }
 };
 
+/**
+ * @brief Helper for materialising min/max term-pair comparisons as DD
+ * variables.
+ *
+ * Collects term pairs requested via @p addPair, then assigns each pair a
+ * decision-diagram variable by building a comparison node through the
+ * variable order.  Thread-safe via a shared mutex.
+ *
+ * @tparam Term  The term type (LinearTerm or SmtTerm).
+ */
 template <typename Term>
 class MinMaxHelper {
  public:
@@ -247,6 +282,19 @@ ddsolve::interface::SmtMinMaxHelperHandle toHandle(MinMaxHelper<SmtTerm>* ptr) {
       <ddsolve::interface::SmtMinMaxHelperHandle>(ptr);
 }
 
+/**
+ * @brief Recursively convert an MTBDD to a conjunction of comparisons.
+ *
+ * Traverses the MTBDD structure: when the high child is false the node
+ * represents the comparison itself (with odd parity indicating negation);
+ * when the low child is false the node represents the negated comparison.
+ * The recursion accumulates results into @p conjunction.
+ *
+ * @tparam Term       The term type.
+ * @param dd          The MTBDD to convert.
+ * @param order       The variable order providing comparison objects.
+ * @param conjunction  Output vector to accumulate comparison-with-parity pairs.
+ */
 template <typename Term>
 void ddToConjunction(
     const sylvan::MTBDD& dd, const ddsolve::VariableOrder<Term>& order,
@@ -273,6 +321,16 @@ void ddToConjunction(
   }
 }
 
+/**
+ * @brief Convert an MTBDD to a conjunction of comparisons.
+ *
+ * Convenience wrapper that allocates and returns the conjunction vector.
+ *
+ * @tparam Term  The term type.
+ * @param dd     The MTBDD to convert.
+ * @param order  The variable order.
+ * @return A vector of comparison-with-parity pairs.
+ */
 template <typename Term>
 std::vector<typename Term::Comparison::WithParity> ddToConjunction(
     const sylvan::MTBDD& dd, const ddsolve::VariableOrder<Term>& order) {
@@ -289,35 +347,77 @@ namespace ddsolve::interface {
 // C part
 extern "C" {
 
+/**
+ * @brief Retrieve the unique ID of a LinearTerm scalar type.
+ */
 uint64_t LinearScalarType_get_id(LinearScalarTypeHandle handle) {
   return LinearTerm::ScalarType_get_id(*toPtr(handle));
 }
 
+/**
+ * @brief Copy a LinearTerm handle.
+ *
+ * @param handle  The term handle to copy.
+ * @return A new handle owning a copy of the term.
+ */
 LinearTermHandle LinearTerm_copy(LinearTermHandle handle) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new LinearTerm::ConstTermPointer{*toPtr(handle)});
 }
 
+/**
+ * @brief Destroy a LinearTerm handle.
+ *
+ * @param handle  The term handle to destroy.
+ */
 void LinearTerm_destroy(LinearTermHandle handle) {
   delete toPtr(handle);  // NOLINT(cppcoreguidelines-owning-memory)
 }
 
+/**
+ * @brief Check equality of two LinearTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return 1 if equal, 0 otherwise.
+ */
 int LinearTerm_equals(LinearTermHandle lhs, LinearTermHandle rhs) {
   return static_cast<int>(toRef(lhs) == toRef(rhs));
 }
 
+/**
+ * @brief Add two LinearTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return A new handle owning the sum.
+ */
 LinearTermHandle LinearTerm_add(LinearTermHandle lhs, LinearTermHandle rhs) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new LinearTerm::ConstTermPointer{
       std::make_shared<LinearTerm>(toRef(lhs) + toRef(rhs))});
 }
 
+/**
+ * @brief Subtract two LinearTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return A new handle owning the difference.
+ */
 LinearTermHandle LinearTerm_sub(LinearTermHandle lhs, LinearTermHandle rhs) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new LinearTerm::ConstTermPointer{
       std::make_shared<LinearTerm>(toRef(lhs) - toRef(rhs))});
 }
 
+/**
+ * @brief Scale a LinearTerm by a scalar.
+ *
+ * @param term_handle     The term to scale.
+ * @param scalar_handle   The scalar multiplier.
+ * @return A new handle owning the scaled term.
+ */
 LinearTermHandle LinearTerm_scale(LinearTermHandle term_handle,
                                   LinearScalarTypeHandle scalar_handle) {
   return toHandle(
@@ -326,6 +426,13 @@ LinearTermHandle LinearTerm_scale(LinearTermHandle term_handle,
           toRef(scalar_handle) * toRef(term_handle))});
 }
 
+/**
+ * @brief Substitute variables in a LinearTerm.
+ *
+ * @param term_handle          The term to substitute in.
+ * @param substitution_handle  The substitution mapping variables to terms.
+ * @return A new handle owning the substituted term.
+ */
 LinearTermHandle LinearTerm_substitute(
     LinearTermHandle term_handle,
     LinearSubstitutionHandle substitution_handle) {
@@ -339,10 +446,27 @@ LinearTermHandle LinearTerm_substitute(
                            *substitution.getTerm()))});
 }
 
+/**
+ * @brief Compute the hash of a LinearTerm.
+ *
+ * @param handle  The term handle.
+ * @return The term's hash value.
+ */
 uint64_t LinearTerm_hash(LinearTermHandle handle) {
   return toRef(handle).hash();
 }
 
+/**
+ * @brief Convert a LinearTerm to a human-readable string.
+ *
+ * If @p buf is large enough the string is written there; otherwise a new
+ * buffer is allocated (caller must free).
+ *
+ * @param handle     The term handle.
+ * @param buf        Pre-allocated buffer (may be null).
+ * @param bufsize    Size of @p buf.
+ * @return A pointer to the string (either @p buf or a newly allocated buffer).
+ */
 char* LinearTerm_to_str(LinearTermHandle handle, char* buf, size_t bufsize) {
   const auto str{toRef(handle).str()};
   if (bufsize > str.length() + 1) {
@@ -356,6 +480,14 @@ char* LinearTerm_to_str(LinearTermHandle handle, char* buf, size_t bufsize) {
   return newbuf;
 }
 
+/**
+ * @brief Perform a trivial (fast-path) check on a LinearTerm comparison.
+ *
+ * @param lhs         The left-hand term.
+ * @param rhs         The right-hand term.
+ * @param comp_type   The comparison type.
+ * @return The result of the trivial check.
+ */
 SmtResult LinearTerm_trivial_check(LinearTermHandle lhs, LinearTermHandle rhs,
                                    ComparisonType comp_type) {
   const auto rval{
@@ -366,6 +498,16 @@ SmtResult LinearTerm_trivial_check(LinearTermHandle lhs, LinearTermHandle rhs,
   return static_cast<SmtResult>(rval);
 }
 
+/**
+ * @brief Decide satisfiability of a LinearTerm comparison conjunction.
+ *
+ * Converts the history MTBDD to a conjunction of comparisons and attempts
+ * to decide it using the appropriate solver (real or unsigned integer).
+ *
+ * @param handle  The variable order handle.
+ * @param history The history MTBDD representing the conjunction.
+ * @return SMTRESULT_SAT or SMTRESULT_UNSAT.
+ */
 SmtResult LinearVariableOrder_decide(LinearVariableOrderHandle handle,
                                      MTBDD history) {
   if (history == sylvan::mtbdd_true) {
@@ -393,6 +535,19 @@ SmtResult LinearVariableOrder_decide(LinearVariableOrderHandle handle,
 #endif
 }
 
+/**
+ * @brief Compare two LinearTerm handles under a history constraint.
+ *
+ * Converts the history MTBDD to a conjunction, adds the comparison between
+ * @p lhs and @p rhs, and decides the result.
+ *
+ * @param handle      The variable order handle.
+ * @param lhs         The left-hand term.
+ * @param rhs         The right-hand term.
+ * @param history     The history MTBDD.
+ * @param comp_type   The comparison type.
+ * @return 1 if lhs < rhs is unsat, 0 if sat, throws if unknown.
+ */
 int LinearVariableOrder_compare(LinearVariableOrderHandle handle,
                                 LinearTermHandle lhs, LinearTermHandle rhs,
                                 MTBDD history, ComparisonType comp_type) {
@@ -436,37 +591,70 @@ SmtResult LinearVariableOrder_compare_real(LinearVariableOrderHandle handle,
 }
 */
 
+/**
+ * @brief Retrieve the unique ID of a LinearTerm variable order.
+ */
 uint64_t LinearVariableOrder_get_id(LinearVariableOrderHandle handle) {
   return toPtr(handle)->getId();
 }
 
+/**
+ * @brief Shut down LinearTerm comparison infrastructure.
+ */
 void LinearVariableOrder_shutdown() {
   LinearTerm::Comparison::shutdown();
 }
 
+/**
+ * @brief Retrieve the unique ID of a LinearTerm substitution.
+ */
 uint64_t LinearSubstitution_get_id(LinearSubstitutionHandle handle) {
   return toPtr(handle)->getId();
 }
 
+/**
+ * @brief Retrieve the unique ID of a LinearTerm MinMaxHelper.
+ */
 uint64_t LinearMinMaxHelper_get_id(LinearMinMaxHelperHandle handle) {
   return toRef(handle).getId();
 }
 
+/**
+ * @brief Add a term pair to the MinMaxHelper.
+ *
+ * @param handle  The helper handle.
+ * @param lhs     The left-hand term.
+ * @param rhs     The right-hand term.
+ */
 void LinearMinMaxHelper_add_pair(LinearMinMaxHelperHandle handle,
                                  LinearTermHandle lhs, LinearTermHandle rhs) {
   toRef(handle).addPair(*toPtr(lhs), *toPtr(rhs));
 }
 
+/**
+ * @brief Finalise the MinMaxHelper (assign DD variables to all pairs).
+ */
 void LinearMinMaxHelper_finalize(LinearMinMaxHelperHandle handle) {
   toRef(handle).finalize();
 }
 
+/**
+ * @brief Get the DD variable for a term pair in the MinMaxHelper.
+ *
+ * @param handle  The helper handle.
+ * @param lhs     The left-hand term.
+ * @param rhs     The right-hand term.
+ * @return The DD variable ID.
+ */
 uint32_t LinearMinMaxHelper_get_var(LinearMinMaxHelperHandle handle,
                                     LinearTermHandle lhs,
                                     LinearTermHandle rhs) {
   return toRef(handle).getVar(*toPtr(lhs), *toPtr(rhs));
 }
 
+/**
+ * @brief Get the variable order handle from the MinMaxHelper.
+ */
 LinearVariableOrderHandle LinearMinMaxHelper_get_order(
     LinearMinMaxHelperHandle handle) {
   return toRef(handle).getOrderHandle();
@@ -474,47 +662,103 @@ LinearVariableOrderHandle LinearMinMaxHelper_get_order(
 
 ///// SMT Part
 
+/**
+ * @brief Retrieve the unique ID of an SmtTerm scalar type.
+ */
 uint64_t SmtScalarType_get_id(SmtScalarTypeHandle handle) {
   return SmtTerm::ScalarType_get_id(*toPtr(handle));
 }
 
+/**
+ * @brief Copy an SmtTerm handle.
+ *
+ * @param handle  The term handle to copy.
+ * @return A new handle owning a copy of the term.
+ */
 SmtTermHandle SmtTerm_copy(SmtTermHandle handle) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new SmtTerm::ConstTermPointer{*toPtr(handle)});
 }
 
+/**
+ * @brief Destroy an SmtTerm handle.
+ *
+ * @param handle  The term handle to destroy.
+ */
 void SmtTerm_destroy(SmtTermHandle handle) {
   delete toPtr(handle);  // NOLINT(cppcoreguidelines-owning-memory)
 }
 
+/**
+ * @brief Check equality of two SmtTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return 1 if equal, 0 otherwise.
+ */
 int SmtTerm_equals(SmtTermHandle lhs, SmtTermHandle rhs) {
   return static_cast<int>(toRef(lhs) == toRef(rhs));
 }
 
+/**
+ * @brief Add two SmtTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return A new handle owning the sum.
+ */
 SmtTermHandle SmtTerm_add(SmtTermHandle lhs, SmtTermHandle rhs) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new SmtTerm::ConstTermPointer{
       std::make_shared<SmtTerm>(toRef(lhs) + toRef(rhs))});
 }
 
+/**
+ * @brief Subtract two SmtTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return A new handle owning the difference.
+ */
 SmtTermHandle SmtTerm_sub(SmtTermHandle lhs, SmtTermHandle rhs) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new SmtTerm::ConstTermPointer{
       std::make_shared<SmtTerm>(toRef(lhs) - toRef(rhs))});
 }
 
+/**
+ * @brief Multiply two SmtTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return A new handle owning the product.
+ */
 SmtTermHandle SmtTerm_mul(SmtTermHandle lhs, SmtTermHandle rhs) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new SmtTerm::ConstTermPointer{
       std::make_shared<SmtTerm>(toRef(lhs) * toRef(rhs))});
 }
 
+/**
+ * @brief Divide two SmtTerm handles.
+ *
+ * @param lhs  The left-hand term.
+ * @param rhs  The right-hand term.
+ * @return A new handle owning the quotient.
+ */
 SmtTermHandle SmtTerm_div(SmtTermHandle lhs, SmtTermHandle rhs) {
   // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
   return toHandle(new SmtTerm::ConstTermPointer{
       std::make_shared<SmtTerm>(toRef(lhs) / toRef(rhs))});
 }
 
+/**
+ * @brief Scale an SmtTerm by a scalar.
+ *
+ * @param term_handle     The term to scale.
+ * @param scalar_handle   The scalar multiplier.
+ * @return A new handle owning the scaled term.
+ */
 SmtTermHandle SmtTerm_scale(SmtTermHandle term_handle,
                             SmtScalarTypeHandle scalar_handle) {
   return toHandle(
@@ -523,6 +767,13 @@ SmtTermHandle SmtTerm_scale(SmtTermHandle term_handle,
           toRef(scalar_handle) * toRef(term_handle))});
 }
 
+/**
+ * @brief Substitute variables in an SmtTerm.
+ *
+ * @param term_handle          The term to substitute in.
+ * @param substitution_handle  The substitution mapping variables to terms.
+ * @return A new handle owning the substituted term.
+ */
 SmtTermHandle SmtTerm_substitute(SmtTermHandle term_handle,
                                  SmtSubstitutionHandle substitution_handle) {
   const auto& substitution{*toPtr(substitution_handle)};
@@ -535,10 +786,27 @@ SmtTermHandle SmtTerm_substitute(SmtTermHandle term_handle,
                            *substitution.getTerm()))});
 }
 
+/**
+ * @brief Compute the hash of an SmtTerm.
+ *
+ * @param handle  The term handle.
+ * @return The term's hash value.
+ */
 uint64_t SmtTerm_hash(SmtTermHandle handle) {
   return toRef(handle).hash();
 }
 
+/**
+ * @brief Convert an SmtTerm to a human-readable string.
+ *
+ * If @p buf is large enough the string is written there; otherwise a new
+ * buffer is allocated (caller must free).
+ *
+ * @param handle     The term handle.
+ * @param buf        Pre-allocated buffer (may be null).
+ * @param bufsize    Size of @p buf.
+ * @return A pointer to the string (either @p buf or a newly allocated buffer).
+ */
 char* SmtTerm_to_str(SmtTermHandle handle, char* buf, size_t bufsize) {
   const auto str{toRef(handle).str()};
   if (bufsize > str.length() + 1) {
@@ -552,6 +820,14 @@ char* SmtTerm_to_str(SmtTermHandle handle, char* buf, size_t bufsize) {
   return newbuf;
 }
 
+/**
+ * @brief Perform a trivial (fast-path) check on an SmtTerm comparison.
+ *
+ * @param lhs         The left-hand term.
+ * @param rhs         The right-hand term.
+ * @param comp_type   The comparison type.
+ * @return The result of the trivial check.
+ */
 SmtResult SmtTerm_trivial_check(SmtTermHandle lhs, SmtTermHandle rhs,
                                 ComparisonType comp_type) {
   const auto rval{
@@ -562,6 +838,16 @@ SmtResult SmtTerm_trivial_check(SmtTermHandle lhs, SmtTermHandle rhs,
   return static_cast<SmtResult>(rval);
 }
 
+/**
+ * @brief Decide satisfiability of an SmtTerm comparison conjunction.
+ *
+ * Converts the history MTBDD to a conjunction of comparisons and attempts
+ * to decide it using the SMT solver.
+ *
+ * @param handle  The variable order handle.
+ * @param history The history MTBDD representing the conjunction.
+ * @return SMTRESULT_SAT or SMTRESULT_UNSAT.
+ */
 SmtResult SmtVariableOrder_decide(SmtVariableOrderHandle handle,
                                   MTBDD history) {
   if (history == sylvan::mtbdd_true) {
@@ -584,6 +870,19 @@ SmtResult SmtVariableOrder_decide(SmtVariableOrderHandle handle,
       SmtTerm::Comparison::decide(conjunction, gPrintModelsFlag));
 }
 
+/**
+ * @brief Compare two SmtTerm handles under a history constraint.
+ *
+ * Converts the history MTBDD to a conjunction, adds the comparison between
+ * @p lhs and @p rhs, and decides the result.
+ *
+ * @param handle      The variable order handle.
+ * @param lhs         The left-hand term.
+ * @param rhs         The right-hand term.
+ * @param history     The history MTBDD.
+ * @param comp_type   The comparison type.
+ * @return 1 if lhs < rhs is unsat, 0 if sat, throws if unknown.
+ */
 int SmtVariableOrder_compare(SmtVariableOrderHandle handle, SmtTermHandle lhs,
                              SmtTermHandle rhs, MTBDD history,
                              ComparisonType comp_type) {
@@ -611,36 +910,69 @@ int SmtVariableOrder_compare(SmtVariableOrderHandle handle, SmtTermHandle lhs,
   std::unreachable();
 }
 
+/**
+ * @brief Retrieve the unique ID of an SmtTerm variable order.
+ */
 uint64_t SmtVariableOrder_get_id(SmtVariableOrderHandle handle) {
   return toPtr(handle)->getId();
 }
 
+/**
+ * @brief Shut down SmtTerm comparison infrastructure.
+ */
 void SmtVariableOrder_shutdown() {
   SmtTerm::Comparison::shutdown();
 }
 
+/**
+ * @brief Retrieve the unique ID of an SmtTerm substitution.
+ */
 uint64_t SmtSubstitution_get_id(SmtSubstitutionHandle handle) {
   return toPtr(handle)->getId();
 }
 
+/**
+ * @brief Retrieve the unique ID of an SmtTerm MinMaxHelper.
+ */
 uint64_t SmtMinMaxHelper_get_id(SmtMinMaxHelperHandle handle) {
   return toRef(handle).getId();
 }
 
+/**
+ * @brief Add a term pair to the SmtTerm MinMaxHelper.
+ *
+ * @param handle  The helper handle.
+ * @param lhs     The left-hand term.
+ * @param rhs     The right-hand term.
+ */
 void SmtMinMaxHelper_add_pair(SmtMinMaxHelperHandle handle, SmtTermHandle lhs,
                               SmtTermHandle rhs) {
   toRef(handle).addPair(*toPtr(lhs), *toPtr(rhs));
 }
 
+/**
+ * @brief Finalise the SmtTerm MinMaxHelper (assign DD variables to all pairs).
+ */
 void SmtMinMaxHelper_finalize(SmtMinMaxHelperHandle handle) {
   toRef(handle).finalize();
 }
 
+/**
+ * @brief Get the DD variable for a term pair in the SmtTerm MinMaxHelper.
+ *
+ * @param handle  The helper handle.
+ * @param lhs     The left-hand term.
+ * @param rhs     The right-hand term.
+ * @return The DD variable ID.
+ */
 uint32_t SmtMinMaxHelper_get_var(SmtMinMaxHelperHandle handle,
                                  SmtTermHandle lhs, SmtTermHandle rhs) {
   return toRef(handle).getVar(*toPtr(lhs), *toPtr(rhs));
 }
 
+/**
+ * @brief Get the variable order handle from the SmtTerm MinMaxHelper.
+ */
 SmtVariableOrderHandle SmtMinMaxHelper_get_order(SmtMinMaxHelperHandle handle) {
   return toRef(handle).getOrderHandle();
 }
@@ -648,12 +980,27 @@ SmtVariableOrderHandle SmtMinMaxHelper_get_order(SmtMinMaxHelperHandle handle) {
 
 // C++ part
 
+/**
+ * @brief Enable or disable model printing during SMT solving.
+ *
+ * @param flag  true to print models, false to suppress.
+ */
 void printModels(const bool flag) {
   gPrintModelsFlag = flag;
 }
 
-///////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Fully prune a LinearTerm decision diagram.
+ *
+ * Delegates to Sylvan's LinearTerm-specific prune_full operation when
+ * @c DO_PRUNE is enabled; otherwise returns the diagram unchanged.
+ *
+ * @param dd     The MTBDD to prune.
+ * @param order  The variable order.
+ * @return The pruned MTBDD.
+ */
 template <>
 sylvan::Mtbdd pruneFull<expression::LinearTerm>(
     const sylvan::Mtbdd& dd, const VariableOrder<LinearTerm>& order) {
@@ -664,6 +1011,16 @@ sylvan::Mtbdd pruneFull<expression::LinearTerm>(
 #endif
 }
 
+/**
+ * @brief Get the prune mask for a LinearTerm decision diagram.
+ *
+ * Delegates to Sylvan's LinearTerm-specific get_prunes operation when
+ * @c DO_PRUNE is enabled; otherwise returns the all-ones MTBDD.
+ *
+ * @param dd     The MTBDD.
+ * @param order  The variable order.
+ * @return The prune mask MTBDD.
+ */
 template <>
 sylvan::Mtbdd getPrunes<expression::LinearTerm>(
     const sylvan::Mtbdd& dd, const VariableOrder<LinearTerm>& order) {
@@ -674,12 +1031,25 @@ sylvan::Mtbdd getPrunes<expression::LinearTerm>(
 #endif
 }
 
+/**
+ * @brief Prune zero leaves in a LinearTerm decision diagram.
+ *
+ * @param dd  The MTBDD to prune.
+ * @return The pruned MTBDD.
+ */
 template <>
 sylvan::Mtbdd prune<expression::LinearTerm>(const sylvan::Mtbdd& dd) {
   using sylvan::sylvan_LinearTerm_op_prune_RUN;
   return sylvan_LinearTerm_prune(dd.GetMTBDD());
 }
 
+/**
+ * @brief Add two LinearTerm decision diagrams.
+ *
+ * @param lhs  The left-hand MTBDD.
+ * @param rhs  The right-hand MTBDD.
+ * @return The sum MTBDD.
+ */
 template <>
 sylvan::Mtbdd add<expression::LinearTerm>(const sylvan::Mtbdd& lhs,
                                           const sylvan::Mtbdd& rhs) {
@@ -688,6 +1058,13 @@ sylvan::Mtbdd add<expression::LinearTerm>(const sylvan::Mtbdd& lhs,
   return sylvan_LinearTerm_plus(lhs.GetMTBDD(), rhs.GetMTBDD());
 }
 
+/**
+ * @brief Subtract two LinearTerm decision diagrams.
+ *
+ * @param lhs  The left-hand MTBDD.
+ * @param rhs  The right-hand MTBDD.
+ * @return The difference MTBDD.
+ */
 template <>
 sylvan::Mtbdd sub<expression::LinearTerm>(const sylvan::Mtbdd& lhs,
                                           const sylvan::Mtbdd& rhs) {
@@ -696,6 +1073,13 @@ sylvan::Mtbdd sub<expression::LinearTerm>(const sylvan::Mtbdd& lhs,
   return sylvan_LinearTerm_minus(lhs.GetMTBDD(), rhs.GetMTBDD());
 }
 
+/**
+ * @brief Scale a LinearTerm decision diagram by a scalar.
+ *
+ * @param scalar  The scalar multiplier.
+ * @param dd      The MTBDD to scale.
+ * @return The scaled MTBDD.
+ */
 template <>
 sylvan::Mtbdd scale<expression::LinearTerm>(
     const LinearTerm::ConstScalarPointer& scalar, const sylvan::Mtbdd& dd) {
@@ -703,6 +1087,12 @@ sylvan::Mtbdd scale<expression::LinearTerm>(
   return sylvan_LinearTerm_scale(dd.GetMTBDD(), toHandle(&scalar));
 }
 
+/**
+ * @brief Convert a LinearTerm to a decision diagram leaf.
+ *
+ * @param term  The term to convert.
+ * @return The MTBDD leaf representing the term.
+ */
 template <>
 sylvan::Mtbdd getTerm<expression::LinearTerm>(const LinearTerm::Term& term) {
   const auto* tmp = new auto(std::make_shared<const LinearTerm::Term>(term));
@@ -711,6 +1101,12 @@ sylvan::Mtbdd getTerm<expression::LinearTerm>(const LinearTerm::Term& term) {
   return rval;
 }
 
+/**
+ * @brief Extract a LinearTerm from an MTBDD leaf.
+ *
+ * @param leaf  The MTBDD leaf.
+ * @return The term if the node is a leaf, or an empty pointer otherwise.
+ */
 template <>
 expression::LinearTerm::ConstTermPointer getTerm<expression::LinearTerm>(
     const sylvan::Mtbdd& leaf) {
@@ -720,6 +1116,14 @@ expression::LinearTerm::ConstTermPointer getTerm<expression::LinearTerm>(
   return {};
 }
 
+/**
+ * @brief Replace a leaf in a LinearTerm decision diagram.
+ *
+ * @param mtbdd     The MTBDD.
+ * @param old_leaf  The leaf to replace.
+ * @param new_leaf  The replacement leaf.
+ * @return The MTBDD with the leaf replaced.
+ */
 template <>
 sylvan::Mtbdd replaceLeaf<expression::LinearTerm>(
     const sylvan::Mtbdd& mtbdd, const sylvan::Mtbdd& old_leaf,
@@ -731,6 +1135,13 @@ sylvan::Mtbdd replaceLeaf<expression::LinearTerm>(
                                         new_leaf.GetMTBDD());
 }
 
+/**
+ * @brief Substitute leafs in a LinearTerm decision diagram.
+ *
+ * @param mtbdd          The MTBDD.
+ * @param substitution   The substitution mapping variables to terms.
+ * @return The MTBDD with leafs substituted.
+ */
 template <>
 sylvan::Mtbdd substituteLeafs<expression::LinearTerm>(
     const sylvan::Mtbdd& mtbdd,
@@ -740,6 +1151,15 @@ sylvan::Mtbdd substituteLeafs<expression::LinearTerm>(
                                             toHandle(&substitution));
 }
 
+/**
+ * @brief Compare two LinearTerm decision diagrams.
+ *
+ * @param lhs     The left-hand MTBDD.
+ * @param rhs     The right-hand MTBDD.
+ * @param comp    The comparison type.
+ * @param order   The variable order.
+ * @return true if the comparison holds.
+ */
 template <>
 bool compare<expression::LinearTerm>(const sylvan::Mtbdd& lhs,
                                      const sylvan::Mtbdd& rhs,
@@ -750,6 +1170,14 @@ bool compare<expression::LinearTerm>(const sylvan::Mtbdd& lhs,
                                            toHandle(&order)) != 0;
 }
 
+/**
+ * @brief Compute the element-wise maximum of two LinearTerm decision diagrams.
+ *
+ * @param lhs     The left-hand MTBDD.
+ * @param rhs     The right-hand MTBDD.
+ * @param order   The variable order.
+ * @return The maximum MTBDD.
+ */
 template <>
 sylvan::Mtbdd max<expression::LinearTerm>(
     const sylvan::Mtbdd& lhs, const sylvan::Mtbdd& rhs,
@@ -760,6 +1188,14 @@ sylvan::Mtbdd max<expression::LinearTerm>(
                                        toHandle(&helper));
 }
 
+/**
+ * @brief Compute the element-wise minimum of two LinearTerm decision diagrams.
+ *
+ * @param lhs     The left-hand MTBDD.
+ * @param rhs     The right-hand MTBDD.
+ * @param order   The variable order.
+ * @return The minimum MTBDD.
+ */
 template <>
 sylvan::Mtbdd min<expression::LinearTerm>(
     const sylvan::Mtbdd& lhs, const sylvan::Mtbdd& rhs,
@@ -772,24 +1208,51 @@ sylvan::Mtbdd min<expression::LinearTerm>(
 
 //////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Fully prune an SmtTerm decision diagram.
+ *
+ * @param dd     The MTBDD to prune.
+ * @param order  The variable order.
+ * @return The pruned MTBDD.
+ */
 template <>
 sylvan::Mtbdd pruneFull<expression::SmtTerm>(
     const sylvan::Mtbdd& dd, const VariableOrder<SmtTerm>& order) {
   return sylvan::sylvan_SmtTerm_prune_full(dd.GetMTBDD(), toHandle(&order));
 }
 
+/**
+ * @brief Get the prune mask for an SmtTerm decision diagram.
+ *
+ * @param dd     The MTBDD.
+ * @param order  The variable order.
+ * @return The prune mask MTBDD.
+ */
 template <>
 sylvan::Mtbdd getPrunes<expression::SmtTerm>(
     const sylvan::Mtbdd& dd, const VariableOrder<SmtTerm>& order) {
   return sylvan::sylvan_SmtTerm_get_prunes(dd.GetMTBDD(), toHandle(&order));
 }
 
+/**
+ * @brief Prune zero leaves in an SmtTerm decision diagram.
+ *
+ * @param dd  The MTBDD to prune.
+ * @return The pruned MTBDD.
+ */
 template <>
 sylvan::Mtbdd prune<expression::SmtTerm>(const sylvan::Mtbdd& dd) {
   using sylvan::sylvan_SmtTerm_op_prune_RUN;
   return sylvan_SmtTerm_prune(dd.GetMTBDD());
 }
 
+/**
+ * @brief Add two SmtTerm decision diagrams.
+ *
+ * @param lhs  The left-hand MTBDD.
+ * @param rhs  The right-hand MTBDD.
+ * @return The sum MTBDD.
+ */
 template <>
 sylvan::Mtbdd add<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
                                        const sylvan::Mtbdd& rhs) {
@@ -798,6 +1261,13 @@ sylvan::Mtbdd add<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
   return sylvan_SmtTerm_plus(lhs.GetMTBDD(), rhs.GetMTBDD());
 }
 
+/**
+ * @brief Subtract two SmtTerm decision diagrams.
+ *
+ * @param lhs  The left-hand MTBDD.
+ * @param rhs  The right-hand MTBDD.
+ * @return The difference MTBDD.
+ */
 template <>
 sylvan::Mtbdd sub<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
                                        const sylvan::Mtbdd& rhs) {
@@ -806,6 +1276,13 @@ sylvan::Mtbdd sub<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
   return sylvan_SmtTerm_minus(lhs.GetMTBDD(), rhs.GetMTBDD());
 }
 
+/**
+ * @brief Multiply two SmtTerm decision diagrams.
+ *
+ * @param lhs  The left-hand MTBDD.
+ * @param rhs  The right-hand MTBDD.
+ * @return The product MTBDD.
+ */
 template <>
 sylvan::Mtbdd mul<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
                                        const sylvan::Mtbdd& rhs) {
@@ -814,6 +1291,13 @@ sylvan::Mtbdd mul<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
   return sylvan_SmtTerm_mul(lhs.GetMTBDD(), rhs.GetMTBDD());
 }
 
+/**
+ * @brief Divide two SmtTerm decision diagrams.
+ *
+ * @param lhs  The left-hand MTBDD.
+ * @param rhs  The right-hand MTBDD.
+ * @return The quotient MTBDD.
+ */
 template <>
 sylvan::Mtbdd div<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
                                        const sylvan::Mtbdd& rhs) {
@@ -822,7 +1306,13 @@ sylvan::Mtbdd div<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
   return sylvan_SmtTerm_div(lhs.GetMTBDD(), rhs.GetMTBDD());
 }
 
-
+/**
+ * @brief Scale an SmtTerm decision diagram by a scalar.
+ *
+ * @param scalar  The scalar multiplier.
+ * @param dd      The MTBDD to scale.
+ * @return The scaled MTBDD.
+ */
 template <>
 sylvan::Mtbdd scale<expression::SmtTerm>(
     const SmtTerm::ConstScalarPointer& scalar, const sylvan::Mtbdd& dd) {
@@ -830,6 +1320,12 @@ sylvan::Mtbdd scale<expression::SmtTerm>(
   return sylvan_SmtTerm_scale(dd.GetMTBDD(), toHandle(&scalar));
 }
 
+/**
+ * @brief Convert an SmtTerm to a decision diagram leaf.
+ *
+ * @param term  The term to convert.
+ * @return The MTBDD leaf representing the term.
+ */
 template <>
 sylvan::Mtbdd getTerm<expression::SmtTerm>(const SmtTerm::Term& term) {
   const auto* tmp = new auto(std::make_shared<const SmtTerm::Term>(term));
@@ -838,6 +1334,12 @@ sylvan::Mtbdd getTerm<expression::SmtTerm>(const SmtTerm::Term& term) {
   return rval;
 }
 
+/**
+ * @brief Extract an SmtTerm from an MTBDD leaf.
+ *
+ * @param leaf  The MTBDD leaf.
+ * @return The term if the node is a leaf, or an empty pointer otherwise.
+ */
 template <>
 expression::SmtTerm::ConstTermPointer getTerm<expression::SmtTerm>(
     const sylvan::Mtbdd& leaf) {
@@ -847,6 +1349,14 @@ expression::SmtTerm::ConstTermPointer getTerm<expression::SmtTerm>(
   return {};
 }
 
+/**
+ * @brief Replace a leaf in an SmtTerm decision diagram.
+ *
+ * @param mtbdd     The MTBDD.
+ * @param old_leaf  The leaf to replace.
+ * @param new_leaf  The replacement leaf.
+ * @return The MTBDD with the leaf replaced.
+ */
 template <>
 sylvan::Mtbdd replaceLeaf<expression::SmtTerm>(const sylvan::Mtbdd& mtbdd,
                                                const sylvan::Mtbdd& old_leaf,
@@ -858,6 +1368,13 @@ sylvan::Mtbdd replaceLeaf<expression::SmtTerm>(const sylvan::Mtbdd& mtbdd,
                                      new_leaf.GetMTBDD());
 }
 
+/**
+ * @brief Substitute leafs in an SmtTerm decision diagram.
+ *
+ * @param mtbdd          The MTBDD.
+ * @param substitution   The substitution mapping variables to terms.
+ * @return The MTBDD with leafs substituted.
+ */
 template <>
 sylvan::Mtbdd substituteLeafs<expression::SmtTerm>(
     const sylvan::Mtbdd& mtbdd,
@@ -867,6 +1384,15 @@ sylvan::Mtbdd substituteLeafs<expression::SmtTerm>(
                                          toHandle(&substitution));
 }
 
+/**
+ * @brief Compare two SmtTerm decision diagrams.
+ *
+ * @param lhs     The left-hand MTBDD.
+ * @param rhs     The right-hand MTBDD.
+ * @param comp    The comparison type.
+ * @param order   The variable order.
+ * @return true if the comparison holds.
+ */
 template <>
 bool compare<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
                                   const sylvan::Mtbdd& rhs,
@@ -877,6 +1403,14 @@ bool compare<expression::SmtTerm>(const sylvan::Mtbdd& lhs,
                                         toHandle(&order)) != 0;
 }
 
+/**
+ * @brief Compute the element-wise maximum of two SmtTerm decision diagrams.
+ *
+ * @param lhs     The left-hand MTBDD.
+ * @param rhs     The right-hand MTBDD.
+ * @param order   The variable order.
+ * @return The maximum MTBDD.
+ */
 template <>
 sylvan::Mtbdd max<expression::SmtTerm>(
     const sylvan::Mtbdd& lhs, const sylvan::Mtbdd& rhs,
@@ -887,6 +1421,14 @@ sylvan::Mtbdd max<expression::SmtTerm>(
                                     toHandle(&helper));
 }
 
+/**
+ * @brief Compute the element-wise minimum of two SmtTerm decision diagrams.
+ *
+ * @param lhs     The left-hand MTBDD.
+ * @param rhs     The right-hand MTBDD.
+ * @param order   The variable order.
+ * @return The minimum MTBDD.
+ */
 template <>
 sylvan::Mtbdd min<expression::SmtTerm>(
     const sylvan::Mtbdd& lhs, const sylvan::Mtbdd& rhs,

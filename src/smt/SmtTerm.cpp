@@ -1,3 +1,17 @@
+/**
+ * @file SmtTerm.cpp
+ * @brief Implementation of SMT term and comparison operations using CVC5.
+ *
+ * This file provides the concrete implementation of SmtTerm and SmtComparison
+ * methods.  It uses a thread-local CVC5 solver (via the parser interface) to
+ * parse, simplify, and evaluate SMT-LIB string expressions.  Global state
+ * manages symbol declarations and assumption stacks shared across threads.
+ *
+ * @note The Doxygen-style comments in this file were generated with the help
+ *       of AI (Qwen3.6-35B-A3B). They have been human-checked on a best-effort
+ *       basis. No lines of logic in this file were written or modified by AI.
+ */
+
 #include "SmtTerm.hpp"
 
 #include <cvc5/cvc5.h>
@@ -27,24 +41,24 @@ namespace {
 
 class ConstGatherer {
  public:
-  void visit(const cvc5::Term &term) {
+  void visit(const cvc5::Term& term) {
     if (term.hasSymbol() && term.getKind() != cvc5::Kind::VARIABLE) {
       terms_.insert(term);
     } else {
-      for (auto &&c : term) {
+      for (auto&& c : term) {
         visit(c);
       }
     }
   }
 
-  void visit(const std::vector<cvc5::Term> &terms) {
-    for (auto &&term : terms) {
+  void visit(const std::vector<cvc5::Term>& terms) {
+    for (auto&& term : terms) {
       visit(term);
     }
   }
 
   [[nodiscard]]
-  const std::set<cvc5::Term> &getTerms() const {
+  const std::set<cvc5::Term>& getTerms() const {
     return terms_;
   }
 
@@ -55,7 +69,7 @@ class ConstGatherer {
 class GlobalState {
  public:
   [[nodiscard]]
-  std::pair<std::shared_lock<std::shared_mutex>, std::vector<std::string> *>
+  std::pair<std::shared_lock<std::shared_mutex>, std::vector<std::string>*>
   getCmds() {
     return std::make_pair(std::shared_lock{mutex}, &cmds_);
   }
@@ -86,9 +100,8 @@ class GlobalState {
     ++assumptions_tag_;
   }
 
-  std::tuple<
-      std::shared_lock<std::shared_mutex>, size_t,
-      const std::vector<ddsolve::expression::SmtComparison::WithParity> *>
+  std::tuple<std::shared_lock<std::shared_mutex>, size_t,
+             const std::vector<ddsolve::expression::SmtComparison::WithParity>*>
   getAssumptions() {
     return {std::shared_lock{mutex}, assumptions_tag_, &assumptions_};
   }
@@ -103,7 +116,7 @@ class GlobalState {
 
 class LocalState {
  private:
-  auto parseTerm(const ddsolve::expression::SmtTerm &term) {
+  auto parseTerm(const ddsolve::expression::SmtTerm& term) {
     try {
 #ifdef USE_SMTTERM_CACHE
       if (cache_[term.hash() & 1023].first == term.str()) {
@@ -126,7 +139,7 @@ class LocalState {
       cache_[term.hash() & 1023] = std::make_pair(term.str(), tmp);
 #endif
       return tmp;
-    } catch (cvc5::parser::ParserException &e) {
+    } catch (cvc5::parser::ParserException& e) {
       std::cerr << "Something went wrong parsing an SmtTerm: " << e.what()
                 << '\n';
       throw;
@@ -134,7 +147,7 @@ class LocalState {
   }
 
   auto parseWithParity(
-      const ddsolve::expression::SmtComparison::WithParity &wp) {
+      const ddsolve::expression::SmtComparison::WithParity& wp) {
     if (wp.parity) {
       return parseTerm(wp.comparison->getTerm());
     }
@@ -157,12 +170,12 @@ class LocalState {
   }
 
   template <typename R>
-  auto mkTerm(cvc5::Kind kind, R &&range) {
+  auto mkTerm(cvc5::Kind kind, R&& range) {
     DTRACE_PROBE(ddsolve, smtterm_mkTerm);
     updateCmds();
 
     std::vector<cvc5::Term> terms{std::forward<R>(range) |
-                                  std::views::transform([this](auto &&i) {
+                                  std::views::transform([this](auto&& i) {
                                     return this->parseTerm(*i);
                                   }) |
                                   std::ranges::to<std::vector>()};
@@ -170,34 +183,34 @@ class LocalState {
     return solver_.simplify(term_manager_.mkTerm(kind, terms), false);
   }
 
-  auto substitute(const ddsolve::expression::SmtTerm &lhs,
-                  const ddsolve::expression::SmtTerm &var,
-                  const ddsolve::expression::SmtTerm &rhs) {
+  auto substitute(const ddsolve::expression::SmtTerm& lhs,
+                  const ddsolve::expression::SmtTerm& var,
+                  const ddsolve::expression::SmtTerm& rhs) {
     updateCmds();
     return solver_.simplify(
         parseTerm(lhs).substitute(parseTerm(var), parseTerm(rhs)), false);
   }
 
-  auto simplify(const ddsolve::expression::SmtTerm &term) {
+  auto simplify(const ddsolve::expression::SmtTerm& term) {
     return solver_.simplify(parseTerm(term), false);
   }
 
   ddsolve::expression::SmtResult decide(
-      const std::vector<ddsolve::expression::SmtComparison::WithParity>
-          &conjunction,
+      const std::vector<ddsolve::expression::SmtComparison::WithParity>&
+          conjunction,
       const bool print_model) {
     using ddsolve::expression::SmtResult;
     updateAssumptions();
 
     solver_.push();
-    for (auto &&i : conjunction) {
+    for (auto&& i : conjunction) {
       solver_.assertFormula(parseWithParity(i));
     }
 
 #ifdef SMT_DEBUG
     std::cout << "\n" << std::flush;
 
-    for (const auto &i : solver_.getAssertions()) {
+    for (const auto& i : solver_.getAssertions()) {
       std::cout << i << "; ";
     }
     std::cout << '\n';
@@ -227,7 +240,7 @@ class LocalState {
       ConstGatherer gatherer{};
       gatherer.visit(solver_.getAssertions());
       std::cout << "{\n";
-      for (auto &&i : gatherer.getTerms()) {
+      for (auto&& i : gatherer.getTerms()) {
         std::cout << "  " << i.getSymbol() << " = " << solver_.getValue(i)
                   << ";\n";
       }
@@ -273,13 +286,13 @@ class LocalState {
     last_assumption_tag_ = assumption_tag;
 
     solver_.resetAssertions();
-    for (auto &&i : *assumptions) {
+    for (auto&& i : *assumptions) {
       solver_.assertFormula(parseWithParity(i));
     }
   }
 };
 
-auto &getLocalStatePtr() {
+auto& getLocalStatePtr() {
   thread_local auto state{std::make_unique<LocalState>()};
 
   return state;
@@ -294,73 +307,73 @@ SmtTerm SmtTerm::simplify() const {
     return *this;
   }
 
-  auto &ls{*getLocalStatePtr()};
+  auto& ls{*getLocalStatePtr()};
   return SmtTerm{ls.simplify(*this).toString()};
 }
 
-SmtTerm SmtTerm::mkIntVar(const std::string &name) {
+SmtTerm SmtTerm::mkIntVar(const std::string& name) {
   gGlobalState.addSymbol(name, "(declare-const " + name + " Int)");
 
   return SmtTerm{name};
 }
 
-SmtTerm SmtTerm::mkRealVar(const std::string &name) {
+SmtTerm SmtTerm::mkRealVar(const std::string& name) {
   gGlobalState.addSymbol(name, "(declare-const " + name + " Real)");
 
   return SmtTerm{name};
 }
 
-SmtTerm SmtTerm::mkReal(const std::string &value) {
+SmtTerm SmtTerm::mkReal(const std::string& value) {
   return SmtTerm{value, false}.simplify();
 }
 
-SmtTerm SmtTerm::mkInt(const std::string &value) {
+SmtTerm SmtTerm::mkInt(const std::string& value) {
   return SmtTerm{value};
 }
 
-SmtTerm SmtTerm::operator+(const SmtTerm &other) const {
-  auto &ls{*getLocalStatePtr()};
+SmtTerm SmtTerm::operator+(const SmtTerm& other) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{
       ls.mkTerm(cvc5::Kind::ADD, std::vector{this, &other}).toString()};
 }
 
-SmtTerm SmtTerm::operator/(const SmtTerm &other) const {
-  auto &ls{*getLocalStatePtr()};
+SmtTerm SmtTerm::operator/(const SmtTerm& other) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{
       ls.mkTerm(cvc5::Kind::DIVISION, std::vector{this, &other}).toString()};
 }
 
-SmtTerm SmtTerm::operator*(const SmtTerm &other) const {
-  auto &ls{*getLocalStatePtr()};
+SmtTerm SmtTerm::operator*(const SmtTerm& other) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{
       ls.mkTerm(cvc5::Kind::MULT, std::vector{this, &other}).toString()};
 }
 
-SmtTerm SmtTerm::operator-(const SmtTerm &other) const {
-  auto &ls{*getLocalStatePtr()};
+SmtTerm SmtTerm::operator-(const SmtTerm& other) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{
       ls.mkTerm(cvc5::Kind::SUB, std::vector{this, &other}).toString()};
 }
 
-SmtTerm SmtTerm::substitute(const Variable &var, const SmtTerm &other) const {
-  auto &ls{*getLocalStatePtr()};
+SmtTerm SmtTerm::substitute(const Variable& var, const SmtTerm& other) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{ls.substitute(*this, var, other).toString()};
 }
 
-SmtComparison SmtComparison::substitute(const SmtTerm::Variable &var,
-                                        const SmtTerm &other) const {
-  auto &ls{*getLocalStatePtr()};
+SmtComparison SmtComparison::substitute(const SmtTerm::Variable& var,
+                                        const SmtTerm& other) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtComparison{ls.substitute(term_, var, other).toString()};
 }
 
 [[nodiscard]] SmtResult SmtComparison::decide(
-    const std::vector<WithParity> &conjunction, bool print_model) {
+    const std::vector<WithParity>& conjunction, bool print_model) {
   return getLocalStatePtr()->decide(conjunction, print_model);
   // return SmtResult::kUnknown;
 }
@@ -369,15 +382,15 @@ void SmtComparison::shutdown() {
   getLocalStatePtr().reset();
 }
 
-SmtComparison::SmtComparison(const SmtTerm &lhs, const SmtTerm &rhs,
-                             const ComparisonType &type) {
-  auto &ls{*getLocalStatePtr()};
+SmtComparison::SmtComparison(const SmtTerm& lhs, const SmtTerm& rhs,
+                             const ComparisonType& type) {
+  auto& ls{*getLocalStatePtr()};
   term_ =
       SmtTerm{ls.mkTerm(smt::cvc5TranslateToKind(type), std::vector{&lhs, &rhs})
                   .toString()};
 }
 
-SmtTerm SmtTerm::mkRealFunction(const std::string &name, unsigned int arity) {
+SmtTerm SmtTerm::mkRealFunction(const std::string& name, unsigned int arity) {
   std::stringstream ss{};
   ss << "(declare-fun " << name << "(";
   for (int k{}; k < arity; ++k) {
@@ -390,7 +403,7 @@ SmtTerm SmtTerm::mkRealFunction(const std::string &name, unsigned int arity) {
   return SmtTerm{name};
 }
 
-SmtTerm SmtTerm::mkIntFunction(const std::string &name, unsigned int arity) {
+SmtTerm SmtTerm::mkIntFunction(const std::string& name, unsigned int arity) {
   std::stringstream ss{};
   ss << "(declare-fun " << name << "(";
   for (int k{}; k < arity; ++k) {
@@ -403,38 +416,38 @@ SmtTerm SmtTerm::mkIntFunction(const std::string &name, unsigned int arity) {
   return SmtTerm{name};
 }
 
-SmtTerm SmtTerm::applyFunction(const std::vector<SmtTerm> &arguments) const {
-  auto &ls{*getLocalStatePtr()};
-  std::vector<const SmtTerm *> tmp{};
+SmtTerm SmtTerm::applyFunction(const std::vector<SmtTerm>& arguments) const {
+  auto& ls{*getLocalStatePtr()};
+  std::vector<const SmtTerm*> tmp{};
   tmp.reserve(arguments.size() + 1);
   tmp.push_back(this);
-  for (const auto &i : arguments) {
+  for (const auto& i : arguments) {
     tmp.push_back(&i);
   }
 
   return SmtTerm{ls.mkTerm(cvc5::Kind::APPLY_UF, tmp).toString()};
 }
 
-[[nodiscard]] SmtTerm SmtTerm::mkIntArray(const std::string &name) {
+[[nodiscard]] SmtTerm SmtTerm::mkIntArray(const std::string& name) {
   gGlobalState.addSymbol(name, "(declare-const " + name + " (Array Int Int))");
   return SmtTerm{name};
 }
 
-[[nodiscard]] SmtTerm SmtTerm::mkRealArray(const std::string &name) {
+[[nodiscard]] SmtTerm SmtTerm::mkRealArray(const std::string& name) {
   gGlobalState.addSymbol(name, "(declare-const " + name + " (Array Int Real))");
   return SmtTerm{name};
 }
 
 [[nodiscard]]
-SmtTerm SmtTerm::arrayStore(const SmtTerm &index, const SmtTerm &value) const {
+SmtTerm SmtTerm::arrayStore(const SmtTerm& index, const SmtTerm& value) const {
   std::stringstream ss{};
   ss << "(store " << term_ << ' ' << index.term_ << ' ' << value.term_ << ')';
   return SmtTerm{ss.str(), false};
 }
 
 [[nodiscard]]
-SmtTerm SmtTerm::arraySelect(const SmtTerm &index) const {
-  auto &ls{*getLocalStatePtr()};
+SmtTerm SmtTerm::arraySelect(const SmtTerm& index) const {
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{
       ls.mkTerm(cvc5::Kind::SELECT, std::vector{this, &index}).toString()};
@@ -442,20 +455,20 @@ SmtTerm SmtTerm::arraySelect(const SmtTerm &index) const {
 
 [[nodiscard]]
 SmtTerm SmtTerm::toReal() const {
-  auto &ls{*getLocalStatePtr()};
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{ls.mkTerm(cvc5::Kind::TO_REAL, std::vector{this}).toString()};
 }
 
 [[nodiscard]]
 SmtTerm SmtTerm::toInt() const {
-  auto &ls{*getLocalStatePtr()};
+  auto& ls{*getLocalStatePtr()};
 
   return SmtTerm{
       ls.mkTerm(cvc5::Kind::TO_INTEGER, std::vector{this}).toString()};
 }
 
-void SmtComparison::pushAssumption(const WithParity &assumption) {
+void SmtComparison::pushAssumption(const WithParity& assumption) {
   gGlobalState.pushAssumption(assumption);
 }
 
@@ -464,36 +477,36 @@ void SmtComparison::popAssumption() {
 }
 
 [[nodiscard]] SmtComparison SmtComparison::operator&(
-    const SmtComparison &other) const {
-  auto &ls{*getLocalStatePtr()};
+    const SmtComparison& other) const {
+  auto& ls{*getLocalStatePtr()};
   return SmtComparison{
       ls.mkTerm(cvc5::Kind::AND, std::vector{&term_, &other.term_}).toString()};
 }
 
 [[nodiscard]] SmtComparison SmtComparison::operator|(
-    const SmtComparison &other) const {
-  auto &ls{*getLocalStatePtr()};
+    const SmtComparison& other) const {
+  auto& ls{*getLocalStatePtr()};
   return SmtComparison{
       ls.mkTerm(cvc5::Kind::OR, std::vector{&term_, &other.term_}).toString()};
 }
 
 [[nodiscard]] SmtComparison SmtComparison::operator~() const {
-  auto &ls{*getLocalStatePtr()};
+  auto& ls{*getLocalStatePtr()};
   return SmtComparison{
       ls.mkTerm(cvc5::Kind::NOT, std::vector{&term_}).toString()};
 }
 
 [[nodiscard]] SmtComparison SmtComparison::mkForallInt(
-    const SmtTerm &var, const SmtComparison &expr) {
-  auto &ls{*getLocalStatePtr()};
+    const SmtTerm& var, const SmtComparison& expr) {
+  auto& ls{*getLocalStatePtr()};
 
   SmtTerm tmp{"(forall ((" + var.str() + " Int)) " + expr.str() + ")"};
   return SmtComparison{ls.simplify(tmp).toString()};
 }
 
 [[nodiscard]] SmtComparison SmtComparison::mkForallReal(
-    const SmtTerm &var, const SmtComparison &expr) {
-  auto &ls{*getLocalStatePtr()};
+    const SmtTerm& var, const SmtComparison& expr) {
+  auto& ls{*getLocalStatePtr()};
 
   SmtTerm tmp{"(forall ((" + var.str() + " Real)) " + expr.str() + ")"};
   return SmtComparison{ls.simplify(tmp).toString()};
