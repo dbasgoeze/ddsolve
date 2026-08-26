@@ -57,12 +57,30 @@ class XADD final : public XDD<XADD<Term>, Term> {
       : XDD<XADD<Term>, Term>{add, std::move(order)} {}
 
  public:
+  /**
+   * @brief Alias for the underlying term type.
+   */
   using TermType = Term;
 
+  /**
+   * @brief Default constructor.
+   */
   XADD() = default;
+  /**
+   * @brief Default copy constructor.
+   */
   XADD(const XADD&) = default;
+  /**
+   * @brief Default move constructor.
+   */
   XADD(XADD&&) = default;
+  /**
+   * @brief Default copy assignment operator.
+   */
   XADD& operator=(const XADD&) = default;
+  /**
+   * @brief Default move assignment operator.
+   */
   XADD& operator=(XADD&&) = default;
   ~XADD() = default;
 
@@ -217,10 +235,16 @@ class XADD final : public XDD<XADD<Term>, Term> {
   [[nodiscard]] XADD operator*(const XADD& other) const
     requires requires(Term a, Term b) { a * b; };
 
+  /**
+   * @brief Scalar multiplication: scalar * XADD.
+   */
   template <typename T>
   friend XADD<T> operator*(const T::ConstScalarPointer& scalar,
                            const XADD<T>& add);
 
+  /**
+   * @brief BDD * XADD multiplication.
+   */
   template <typename T>
   friend XADD<T> operator*(const XBDD<T>& bdd, const XADD<T>& add);
 };

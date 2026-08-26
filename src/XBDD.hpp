@@ -54,12 +54,30 @@ class XBDD final : public XDD<XBDD<Term>, Term> {
       : XDD<XBDD<Term>, Term>{mtbdd, std::move(order)} {}
 
  public:
+  /**
+   * @brief Alias for the underlying term type.
+   */
   using TermType = Term;
 
+  /**
+   * @brief Default constructor.
+   */
   XBDD() = default;
+  /**
+   * @brief Default copy constructor.
+   */
   XBDD(const XBDD&) = default;
+  /**
+   * @brief Default move constructor.
+   */
   XBDD(XBDD&&) = default;
+  /**
+   * @brief Default copy assignment operator.
+   */
   XBDD& operator=(const XBDD&) = default;
+  /**
+   * @brief Default move assignment operator.
+   */
   XBDD& operator=(XBDD&&) = default;
   ~XBDD() = default;
 
@@ -203,6 +221,9 @@ class XBDD final : public XDD<XBDD<Term>, Term> {
    */
   [[nodiscard]] static XBDD getSupport(const XADD<Term>& add);
 
+  /**
+   * @brief XBDD * XADD multiplication.
+   */
   template <typename T>
   friend XADD<T> operator*(const XBDD<T>& bdd, const XADD<T>& add);
 };

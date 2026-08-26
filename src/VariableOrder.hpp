@@ -146,11 +146,17 @@ class VariableOrder {
    * @brief Default constructor – creates an empty variable order.
    */
   VariableOrder() = default;
+  /**
+   * @brief Move constructor.
+   */
   VariableOrder(VariableOrder&& other) = default;
   ~VariableOrder() = default;
 
   VariableOrder& operator=(const VariableOrder& other) = delete;
 
+  /**
+   * @brief Move assignment operator.
+   */
   VariableOrder& operator=(VariableOrder&& other) noexcept = default;
 
   /**

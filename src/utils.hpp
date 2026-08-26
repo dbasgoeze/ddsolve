@@ -40,6 +40,9 @@ namespace ddsolve {
  * pointer-address comparison.
  */
 struct indirection {
+  /**
+   * @brief Dereferences the pointer-like type and returns the referenced value.
+   */
   template <typename T>
   constexpr decltype(auto) operator()(T&& t) const {
     return *std::forward<T>(t);
@@ -53,6 +56,9 @@ struct indirection {
  * the less-than operator, rather than comparing the pointers themselves.
  */
 struct indirection_less {
+  /**
+   * @brief Compares dereferenced values using less-than.
+   */
   template <typename T>
   constexpr bool operator()(const T& lhs, const T& rhs) const {
     return *lhs < *rhs;
@@ -66,6 +72,9 @@ struct indirection_less {
  * equality, rather than comparing the pointers themselves.
  */
 struct indirection_equal_to {
+  /**
+   * @brief Compares dereferenced values for equality.
+   */
   template <typename T>
   constexpr bool operator()(const T& lhs, const T& rhs) const {
     return *lhs == *rhs;
@@ -116,6 +125,9 @@ concept Hashable = MemberHashable<T> || StdHashable<T>;
  */
 template <Hashable T>
 struct IndirectHash {
+  /**
+   * @brief Hashes the dereferenced value.
+   */
   template <typename Ptr>
     requires MemberHashable<T> && requires(const Ptr& p) {
       { *p } -> std::convertible_to<const T&>;
@@ -124,6 +136,9 @@ struct IndirectHash {
     return (*ptr).hash();
   }
 
+  /**
+   * @brief Hashes the dereferenced value with a seed.
+   */
   template <typename Ptr>
     requires(!MemberHashable<T>) && StdHashable<T> && requires(const Ptr& p) {
       { *p } -> std::convertible_to<const T&>;
@@ -140,6 +155,9 @@ struct IndirectHash {
  * `size_t` value.
  */
 struct MemberHash {
+  /**
+   * @brief Computes hash via the member hash() method.
+   */
   template <MemberHashable T>
   [[nodiscard]] constexpr size_t operator()(const T& a) const {
     return a.hash();

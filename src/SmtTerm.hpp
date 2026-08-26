@@ -170,9 +170,21 @@ class SmtTerm {
       : term_{std::move(term)},
         hash_cache_{calc_hash()},
         isSimplified_{isSimplified} {}
+  /**
+   * @brief Default copy constructor.
+   */
   SmtTerm(const SmtTerm&) = default;
+  /**
+   * @brief Default move constructor.
+   */
   SmtTerm(SmtTerm&&) = default;
+  /**
+   * @brief Default copy assignment.
+   */
   SmtTerm& operator=(const SmtTerm&) = default;
+  /**
+   * @brief Default move assignment.
+   */
   SmtTerm& operator=(SmtTerm&&) = default;
   ~SmtTerm() = default;
 
@@ -420,9 +432,21 @@ class SmtComparison {
   SmtComparison(const SmtTerm& lhs, const SmtTerm& rhs,
                 const ComparisonType& type);
 
+  /**
+   * @brief Default copy constructor.
+   */
   SmtComparison(const SmtComparison&) = default;
+  /**
+   * @brief Default move constructor.
+   */
   SmtComparison(SmtComparison&&) = default;
+  /**
+   * @brief Default copy assignment.
+   */
   SmtComparison& operator=(const SmtComparison&) = default;
+  /**
+   * @brief Default move assignment.
+   */
   SmtComparison& operator=(SmtComparison&&) = default;
   ~SmtComparison() = default;
 
@@ -460,7 +484,13 @@ class SmtComparison {
    * Used when encoding parity constraints alongside arithmetic comparisons.
    */
   struct WithParity {
+    /**
+     * @brief Whether the comparison is negated (false = negated).
+     */
     bool parity;
+    /**
+     * @brief The comparison expression.
+     */
     std::shared_ptr<const SmtComparison> comparison;
   };
 

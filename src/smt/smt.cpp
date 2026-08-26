@@ -409,8 +409,6 @@ namespace ddsolve::expression {
  *
  * Delegates to the real-valued SMT solver backend via its thread-local state.
  *
- * @param conjunction  The linear comparison conjunction to decide.
- * @param print_model  Whether to print the satisfying model on stdout.
  * @return The SMT result (sat, unsat, or unknown).
  */
 [[nodiscard]] SmtResult LinearComparison::decideReal(
@@ -429,8 +427,6 @@ namespace ddsolve::expression {
  * Delegates to the integer-valued SMT solver backend via its thread-local
  * state.
  *
- * @param conjunction  The linear comparison conjunction to decide.
- * @param print_model  Whether to print the satisfying model on stdout.
  * @return The SMT result (sat, unsat, or unknown).
  */
 [[nodiscard]] SmtResult LinearComparison::decideUInt(

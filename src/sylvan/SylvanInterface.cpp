@@ -37,6 +37,10 @@
 
 // dirty hack until sylvan refactor
 extern "C" {
+/**
+ * @brief Flag controlling whether satisfying models are printed during decision
+ * procedures.
+ */
 int gPrintModelsFlag = 0;
 }
 
@@ -982,8 +986,6 @@ SmtVariableOrderHandle SmtMinMaxHelper_get_order(SmtMinMaxHelperHandle handle) {
 
 /**
  * @brief Enable or disable model printing during SMT solving.
- *
- * @param flag  true to print models, false to suppress.
  */
 void printModels(const bool flag) {
   gPrintModelsFlag = flag;

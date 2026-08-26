@@ -52,7 +52,14 @@ class LinearComparison;
  * and its corresponding rational (GMP mpq_class) coefficient.
  */
 struct Product {
+  /**
+   * @brief The variable identifier.
+   */
   VariableId variable{};
+  /**
+   * @brief The rational coefficient for this variable. (Note: 'cofficent' is
+   * the original spelling.)
+   */
   mpq_class coefficent;
 };
 
@@ -686,7 +693,7 @@ class LinearComparison {
   /**
    * @brief Construct a comparison from two terms and a comparison type.
    *
-   * Represents lhs <type> rhs by internally storing (lhs - rhs) <type> 0.
+   * Represents lhs `\c type` rhs by internally storing (lhs - rhs) `\c type` 0.
    *
    * @param lhs  The left-hand side term.
    * @param rhs  The right-hand side term.
@@ -806,7 +813,13 @@ class LinearComparison {
    * Used when encoding parity constraints alongside arithmetic comparisons.
    */
   struct WithParity {
+    /**
+     * @brief Whether the comparison is negated (false = negated).
+     */
     bool parity;
+    /**
+     * @brief The comparison expression.
+     */
     std::shared_ptr<const LinearComparison> comparison;
   };
 

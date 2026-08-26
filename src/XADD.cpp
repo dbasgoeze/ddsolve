@@ -38,8 +38,6 @@ namespace ddsolve {
  *
  * @tparam T      Derived diagram type.
  * @tparam Term   Term type.
- * @param var     The variable to substitute.
- * @param term    The term to substitute it with.
  * @return A new diagram with the substitution applied.
  */
 template <typename T, typename Term>
@@ -71,8 +69,6 @@ template <typename T, typename Term>
  * @brief If-then-else combining a boolean condition with XADD branches.
  *
  * @tparam Term  Term type.
- * @param b  The then-branch (XADD).
- * @param c  The else-branch (XADD).
  * @return An XADD representing @p ite(condition, b, c).
  *
  * All operands must share the same variable order.
@@ -306,9 +302,15 @@ template class XADD<expression::LinearTerm>;
 template class XDD<XBDD<expression::LinearTerm>, expression::LinearTerm>;
 template class XDD<XADD<expression::LinearTerm>, expression::LinearTerm>;
 
+/**
+ * @brief XBDD * XADD multiplication for LinearTerm.
+ */
 template XADD<expression::LinearTerm> operator*(
     const XBDD<expression::LinearTerm>& bdd,
     const XADD<expression::LinearTerm>& add);
+/**
+ * @brief Scalar * XADD multiplication for LinearTerm.
+ */
 template XADD<expression::LinearTerm> operator*(
     const expression::LinearTerm::ConstScalarPointer& scalar,
     const XADD<expression::LinearTerm>& add);
@@ -320,8 +322,14 @@ template class XADD<expression::SmtTerm>;
 template class XDD<XBDD<expression::SmtTerm>, expression::SmtTerm>;
 template class XDD<XADD<expression::SmtTerm>, expression::SmtTerm>;
 
+/**
+ * @brief XBDD * XADD multiplication for SmtTerm.
+ */
 template XADD<expression::SmtTerm> operator*(
     const XBDD<expression::SmtTerm>& bdd, const XADD<expression::SmtTerm>& add);
+/**
+ * @brief Scalar * XADD multiplication for SmtTerm.
+ */
 template XADD<expression::SmtTerm> operator*(
     const expression::SmtTerm::ConstScalarPointer& scalar,
     const XADD<expression::SmtTerm>& add);

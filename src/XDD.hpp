@@ -83,10 +83,25 @@ class XDD {
   explicit XDD(VariableOrder<Term>::VariableOrderPointer order)
       : XDD({}, order) {}
 
+  /**
+   * @brief Default constructor.
+   */
   XDD() = default;
+  /**
+   * @brief Default copy constructor.
+   */
   XDD(const XDD& other) = default;
+  /**
+   * @brief Default move constructor.
+   */
   XDD(XDD&& other) = default;
+  /**
+   * @brief Default copy assignment operator.
+   */
   XDD& operator=(const XDD& other) = default;
+  /**
+   * @brief Default move assignment operator.
+   */
   XDD& operator=(XDD&& other) noexcept = default;
 
   /**
@@ -219,7 +234,7 @@ class XDD {
 
   /**
    * @brief Get the variable order associated with this diagram.
-   * @reference to the variable order.
+   * @brief Returns a reference to the variable order.
    */
   auto& getOrder() const {
     return order_;
