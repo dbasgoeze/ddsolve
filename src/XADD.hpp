@@ -243,7 +243,11 @@ class XADD final : public XDD<XADD<Term>, Term> {
                            const XADD<T>& add);
 
   /**
-   * @brief BDD * XADD multiplication.
+   * @brief Restrict this XADD to the domain of a boolean diagram.
+   *
+   * The boolean diagram acts as a selector: paths where it is true keep the
+   * XADD value; paths where it is false become undefined (`mtbdd_false`).
+   * The result is a partial-domain restriction, not `ite(bdd, *this, zero)`.
    */
   template <typename T>
   friend XADD<T> operator*(const XBDD<T>& bdd, const XADD<T>& add);

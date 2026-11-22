@@ -239,14 +239,17 @@ inline void swap(XBDD<Term>& lhs, XBDD<Term>& rhs) noexcept {
 }
 
 /**
- * @brief Multiply a boolean diagram by an arithmetic diagram.
+ * @brief Restrict an arithmetic diagram to the domain of a boolean diagram.
  *
- * This operator uses the boolean diagram as a selector: when the BDD leaf
- * is true, the XADD value is selected; when false, the result is zero.
+ * The boolean diagram acts as a selector: paths where it evaluates to true
+ * keep the XADD value; paths where it evaluates to false become undefined
+ * (`mtbdd_false`).  The result is a partial-domain restriction, not the
+ * total function `ite(bdd, add, zero)`; use `XADD::undefinedToZero()` if a
+ * total function is needed.
  *
  * @param bdd  The boolean selector.
  * @param add  The arithmetic diagram.
- * @return The pointwise product of @p bdd and @p add.
+ * @return @p add restricted to the domain where @p bdd is true.
  */
 template <typename Term>
 XADD<Term> operator*(const XBDD<Term>& bdd, const XADD<Term>& add);

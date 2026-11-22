@@ -20,6 +20,9 @@ specification):
 - `XBDD.__eq__` compares variable-order *identity* plus the underlying
   MTBDD, so structurally identical diagrams built from two different
   `VariableOrder` objects compare unequal.
+- `XBDD * XADD` is an intentional partial-domain restriction: paths where
+  the boolean diagram is false become undefined (`mtbdd_false`), so the
+  result is not the total `ite(bdd, add, zero)`.
 - `Support()` on the MTBDD representation has murky semantics for
   non-boolean leaves, so `get_support` is only checked lightly for nodes.
 """
@@ -240,6 +243,38 @@ class TestIte:
         assert result.get_then().get_term() == one.get_term()
         assert result.get_else().is_leaf()
         assert result.get_else().get_term() == zero.get_term()
+
+
+class TestSelectorProduct:
+    """`XBDD * XADD` — an intentional partial-domain restriction.
+
+    The product keeps the XADD leaf on paths where the boolean diagram is
+    true and becomes undefined (`mtbdd_false`) where it is false — i.e.
+    `ite(bdd, add, undefined)`, not the total `ite(bdd, add, zero)`.
+    """
+
+    def test_is_partial_domain_restriction(self, variable_order):
+        node = make_node(variable_order[0])
+        xadd = ddsolve.XADD(variable_order[0])
+        one, zero = xadd.get_one(), xadd.get_zero()
+        undefined = xadd.get_undefined()
+        product = node * one
+        assert product == node.ite(one, undefined)
+        assert product != node.ite(one, zero)
+
+    def test_children_reachable(self, variable_order):
+        node = make_node(variable_order[0])
+        xadd = ddsolve.XADD(variable_order[0])
+        one = xadd.get_one()
+        product = node * one
+        then_ = product.get_then()
+        else_ = product.get_else()
+        # The then leaf is the XADD leaf (`1`); the else leaf is the
+        # undefined one, which carries no term.
+        assert then_.is_leaf() and else_.is_leaf()
+        assert then_.get_term() == one.get_term()
+        assert else_.is_false()
+        assert else_.get_term() is None
 
 
 class TestWithOrder:

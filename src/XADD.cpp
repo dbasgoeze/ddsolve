@@ -213,9 +213,16 @@ template <typename Term>
 
 /**
  * @brief Convert this XADD to a term.
+ *
+ * The undefined leaf (`mtbdd_false`, i.e. @p isFalse) carries no term; for
+ * it an empty pointer is returned rather than invoking the Sylvan
+ * interface, which would dereference a null handle.
  */
 template <typename Term>
 [[nodiscard]] Term::ConstTermPointer XADD<Term>::getTerm() const {
+  if (this->isFalse()) {
+    return {};
+  }
   return interface::getTerm<Term>(this->getMtbdd());
 }
 
@@ -237,10 +244,13 @@ template <typename Term>
 }
 
 /**
- * @brief Multiply a boolean diagram by an arithmetic diagram.
+ * @brief Restrict an arithmetic diagram to the domain of a boolean diagram.
  *
- * Uses the boolean diagram as a selector: when the BDD leaf is true the
- * XADD value is selected; when false the result is zero.
+ * This operator is a partial-domain restriction: on paths where the boolean
+ * diagram evaluates to true the XADD value is kept; where it evaluates to
+ * false the result is undefined (`mtbdd_false`).  The result is therefore
+ * intentionally *not* the total function `bdd.ite(add, zero)`; use
+ * `undefinedToZero()` if a total function is needed.
  */
 template <typename Term>
 XADD<Term> operator*(const XBDD<Term>& bdd, const XADD<Term>& add) {
