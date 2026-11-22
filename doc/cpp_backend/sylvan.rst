@@ -20,6 +20,12 @@ the public API surface, with the implementation in
 `SylvanInterface.cpp` and `sylvan_ddsolve.c`.
 
 Because of the macro-heavy declarations, this page provides a
-conceptual overview rather than detailed per-function documentation.
-For the exact function signatures, refer directly to the source
-headers.
+conceptual overview rather than detailed per-function documentation
+for the C layer. The C++ header API, however, can be rendered
+automatically:
+
+C++ Header API
+--------------
+
+.. doxygenfile:: SylvanInterface.hpp
+   :project: ddsolve

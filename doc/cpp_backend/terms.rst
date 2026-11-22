@@ -29,6 +29,9 @@ foundation for weakest precondition computations and constraint generation.
 .. doxygenenum:: ddsolve::expression::FinityType
    :project: ddsolve
 
+.. doxygentypedef:: VariableId
+   :project: ddsolve
+
 SMT Terms
 ---------
 
@@ -48,8 +51,5 @@ They encode constraints in a format that solvers can process directly.
 Comparison and Result Types
 ---------------------------
 
-.. doxygenenum:: ddsolve::expression::ComparisonType
-   :project: ddsolve
-
-.. doxygenenum:: ddsolve::expression::SmtResult
-   :project: ddsolve
+The ``ComparisonType`` and ``SmtResult`` enumerations, along with their
+conversion helpers, are documented on the :doc:`arithmetic_types` page.

@@ -1,8 +1,11 @@
+.. _utils_8hpp:
+
 Utilities
 =========
 
 Hash utilities, indirect references, and merge views for generic programming
-support within the C++ backend.
+support within the C++ backend. All of the types on this page live in the
+header ``utils.hpp``.
 
 Indirection Types
 -----------------
@@ -27,6 +30,14 @@ Hash Functions
 
 .. doxygenstruct:: ddsolve::IndirectHash
    :project: ddsolve
+
+``IndirectHash`` hashes the value behind an indirect reference (pointer,
+``std::unique_ptr``, …). Because Doxygen cannot express the C++20
+``requires``-constrained overloads used to implement it, its member
+functions are not rendered automatically: depending on whether ``T``
+provides a ``hash()`` member function, ``operator()`` either calls that
+member function on the dereferenced value or falls back to
+``std::hash<T>``.
 
 .. doxygenstruct:: ddsolve::MemberHash
    :project: ddsolve

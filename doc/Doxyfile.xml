@@ -1,7 +1,7 @@
 # Doxygen configuration for XML-only output
 
 PROJECT_NAME           = "ddsolve"
-OUTPUT_DIRECTORY       = ../doxygen
+OUTPUT_DIRECTORY       = _build/doxygen
 GENERATE_HTML          = NO
 GENERATE_XML           = YES
 INPUT                  = ../src

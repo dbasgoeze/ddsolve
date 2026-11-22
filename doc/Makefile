@@ -2,7 +2,7 @@ UV = uv
 
 .PHONY: all clean serve docs doxygen html
 
-DOXYDIR  = ../doxygen
+DOXYDIR  = _build/doxygen
 BUILD_DIR = _build/html
 
 doxygen:
@@ -18,7 +18,7 @@ html: doxygen
 docs: html
 
 clean:
-	rm -rf _build $(DOXYDIR) .venv
+	rm -rf _build .venv
 
 serve: html
 	python3 -m http.server --directory $(BUILD_DIR) 8000

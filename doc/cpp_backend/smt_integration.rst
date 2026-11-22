@@ -9,7 +9,10 @@ SmtWrapper Concept
 ------------------
 
 The ``SmtWrapper`` concept defines the interface that all SMT solver
-implementations must provide. See ``SmtWrapper.hpp`` for the full definition.
+implementations must provide.
+
+It is defined in the header ``SmtWrapper.hpp`` together with the type
+aliases that select the concrete solver types at compile time.
 
 .. doxygenconcept:: ddsolve::smt::SmtWrapper
    :project: ddsolve
@@ -20,7 +23,11 @@ Solver Implementations
 Z3 Wrapper
 ~~~~~~~~~~
 
-The Z3 wrapper provides integration with the Z3 SMT solver.
+The Z3 wrapper provides integration with the Z3 SMT solver. Its expression
+type is a file-scope alias:
+
+.. doxygentypedef:: ddsolve::smt::Z3Expression
+   :project: ddsolve
 
 .. doxygenclass:: ddsolve::smt::Z3Wrapper
    :project: ddsolve
