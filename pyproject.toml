@@ -10,6 +10,9 @@ dependencies = ["lark", "tqdm"]
 [project.scripts]
 ddsolve = "ddsolve.cli:main"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.scikit-build]
 wheel.packages = []
 wheel.py-api = "cp312"

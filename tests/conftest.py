@@ -8,12 +8,12 @@ def pytest_generate_tests(metafunc):
 
     name = "verifying_path"
     if name in metafunc.fixturenames:
-        paths = Path("./verifying_progs/").glob("*.pgcl")
+        paths = sorted(Path(__file__).parent.glob("verifying_progs/*.pgcl"))
         metafunc.parametrize(name, paths, ids=lambda x: x.name)
 
     name = "failing_path"
     if name in metafunc.fixturenames:
-        paths = Path("./failing_progs/").glob("*.pgcl")
+        paths = sorted(Path(__file__).parent.glob("failing_progs/*.pgcl"))
         metafunc.parametrize(name, paths, ids=lambda x: x.name)
 
 
