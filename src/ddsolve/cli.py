@@ -22,7 +22,6 @@ def main():
             or 2 if an unknown mode is specified.
     """
 
-def main():
     arg_parser = argparse.ArgumentParser(
         prog="ddsolve", description="Expectation-Based Probabilistic Program Verifier"
     )
