@@ -12,6 +12,8 @@ ddsolve = "ddsolve.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = ["slow: full program verification tests that can take a long time (run with `-m slow`)"]
 
 [dependency-groups]
 dev = ["pytest"]
