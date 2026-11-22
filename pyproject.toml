@@ -13,6 +13,9 @@ ddsolve = "ddsolve.cli:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[dependency-groups]
+dev = ["pytest"]
+
 [tool.scikit-build]
 wheel.packages = []
 wheel.py-api = "cp312"

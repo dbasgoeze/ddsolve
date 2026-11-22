@@ -43,7 +43,7 @@ def verifier(variable_order):
 def _prog(path, order):
     with open(path) as f:
         rval = f.read()
-    rval = ddsolve.parse(rval, order)
+    rval, _ = ddsolve.parse(rval, order)
     return rval
 
 
