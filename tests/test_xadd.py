@@ -26,8 +26,6 @@ specification):
   like `x3 < 1` and `x3 < 1/2` are interchangeable.
 - `prune` / `prune_full` and `get_prunes` semantics on diagrams with
   undefined leaves are murky, so those are only checked lightly.
-- `get_neg_infty` is bound incorrectly (it also produces positive
-  infinity) — see `tests/test_xadd_quirks.py`.
 - For Smt diagrams: `undefined_to_zero` inserts the *default-constructed*
   `SmtTerm()` (an empty term), not an arithmetic zero; `prune_full` may
   restructure even fully-defined diagrams, so only structural properties
@@ -123,6 +121,17 @@ class TestConstants:
         assert inf.get_term() == ddsolve.LinearTerm(
             ddsolve.FinityType.kPositiveInfinite
         )
+
+    def test_neg_infty(self, variable_order):
+        xadd = ddsolve.XADD(variable_order[0])
+        neg_infty = xadd.get_neg_infty()
+        infty = xadd.get_infty()
+        assert neg_infty.is_leaf()
+        assert neg_infty.get_term() == ddsolve.LinearTerm(
+            ddsolve.FinityType.kNegativeInfinite
+        )
+        # The two infinities are distinct leaves.
+        assert neg_infty != infty
 
     def test_constants_share_order(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
@@ -235,6 +244,37 @@ class TestMinMax:
         with pytest.raises(ValueError):
             a.min(b)
 
+    def test_min_max_of_crossing_leaf_terms_case_splits(self, variable_order):
+        """min/max of two leaf diagrams with distinct linear terms.
+
+        Both must case-split on the crossing condition (Algorithm 4,
+        two-terminal case) instead of collapsing to a single leaf, which
+        would silently discard one operand.  The implementation splits on
+        the *flipped* comparison (`x3 < 20/3`, the `not (A < B)` form)
+        with swapped branches — semantically identical, only the canonical
+        form differs from the algorithm's wording.
+
+        (Relocated from tests/test_xadd_quirks.py.)
+        """
+        xadd = ddsolve.XADD(variable_order[0])
+        a = xadd.get_term(term((0, 1), (3, "-1/10")))   # 1 - x3/10
+        b = xadd.get_term(term((3, "1/20")))            # x3/20
+        # They cross at x3 = 20/3.
+        minimum = a.min(b)
+        maximum = a.max(b)
+        assert not minimum.is_leaf()
+        assert not maximum.is_leaf()
+        cond_flip = ddsolve.XBDD(variable_order[0]).obtain_repr(
+            ddsolve.LinearComparison(term((0, "-1"), (3, "3/20")),
+                                     ddsolve.ComparisonType.kLessThan))
+        # Pointwise equality (wp.py `==` idiom), plus the branch layout.
+        assert pointwise_equal(minimum, cond_flip.ite(b, a))
+        assert pointwise_equal(maximum, cond_flip.ite(a, b))
+        assert minimum.get_then().get_term() == b.get_term()
+        assert minimum.get_else().get_term() == a.get_term()
+        assert maximum.get_then().get_term() == a.get_term()
+        assert maximum.get_else().get_term() == b.get_term()
+
 
 class TestComparisonOps:
     def test_constant_comparisons(self, variable_order):
@@ -293,6 +333,16 @@ class TestComparisonOps:
         a = xadd.get_term(term((0, 1), (3, -1)))
         b = xadd.get_term(term((3, 1)))
         assert not pointwise_equal(a, b)
+
+    def test_mixed_orders_raise(self, variable_order):
+        a = make_node(variable_order[0])
+        b = ddsolve.XADD(ddsolve.VariableOrder()).get_one()
+        for op in ("lt", "le"):
+            with pytest.raises(ValueError):
+                if op == "lt":
+                    a < b
+                else:
+                    a <= b
 
     def test_pointwise_equality_across_canonical_forms(self, variable_order):
         """Pointwise equality aligns diagrams with different case splits.

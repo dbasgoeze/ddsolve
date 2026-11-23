@@ -353,7 +353,7 @@ NB_MODULE(_ddsolve, m) {  // NOLINT
           "get_neg_infty",
           [](const LinearXADD& dd) {
             return dd.getTerm(std::make_shared<ddsolve::expression::LinearTerm>(
-                ddsolve::expression::FinityType::kPositiveInfinite));
+                ddsolve::expression::FinityType::kNegativeInfinite));
           })
       .def("get_zero",
            [](const LinearXADD& dd) {

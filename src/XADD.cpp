@@ -87,6 +87,9 @@ template <typename Term>
  */
 template <typename Term>
 [[nodiscard]] bool XADD<Term>::operator<(const XADD<Term>& other) const {
+  if (this->getOrder() != other.getOrder()) {
+    throw std::invalid_argument{"Operation on DDs with different Orderings!"};
+  }
   return interface::compare(this->getMtbdd(), other.getMtbdd(),
                             expression::ComparisonType::kLessThan,
                             *this->getOrder());
@@ -97,6 +100,9 @@ template <typename Term>
  */
 template <typename Term>
 [[nodiscard]] bool XADD<Term>::operator<=(const XADD<Term>& other) const {
+  if (this->getOrder() != other.getOrder()) {
+    throw std::invalid_argument{"Operation on DDs with different Orderings!"};
+  }
   return interface::compare(this->getMtbdd(), other.getMtbdd(),
                             expression::ComparisonType::kLessThanOrEqual,
                             *this->getOrder());
