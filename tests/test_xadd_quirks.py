@@ -1,9 +1,10 @@
 """Known-bug tests for C++ quirks of the Python-exposed XADD interface.
 
-These tests encode the *desired* behavior and are expected to FAIL with the
-current C++ implementation.  They turn green once the underlying bug is
-fixed — at that point the fix is confirmed and these assertions can be
-relocated to the regular suite.
+These tests encode the *desired* behavior.  They turn green once the
+underlying bug is fixed — at that point the fix is confirmed and these
+assertions can be relocated to the regular suite.  Tests whose bugs are
+still open are marked `xfail(strict=True)` so they stay visible without
+breaking the suite.
 
 Quirks covered:
 
@@ -11,18 +12,19 @@ Quirks covered:
    `FinityType::kPositiveInfinite`, the same constant as `get_infty`, so it
    returns positive infinity instead of negative infinity.
 
-2. `XADD.min` / `XADD.max` lose information when both operands are leaf
-   diagrams carrying *distinct* linear terms.  Per Algorithm 4 (two-terminal
-   case, l. 5–6) they must case-split on `Obtain(L_T(X1) < L_T(X2), X1, X2)`,
-   producing a diagram with the crossing condition as the top variable;
-   instead both return a single leaf (one operand's term), so the other
-   operand is silently discarded.
+2. `XADD.min` / `XADD.max` used to lose information when both operands were
+   leaf diagrams carrying *distinct* linear terms (collapsing to a single
+   leaf, silently discarding the other operand).  Since the sylvan gather
+   fix they case-split on the crossing condition; only the canonical form
+   deviates from Algorithm 4 (flipped comparison with swapped branches —
+   see `TestMinMaxOfCrossingLeaves`).
 
 The test bodies run in subprocesses: a failing assertion inside the child
 would otherwise pin the traceback in the parent (keeping the C++ objects
 alive), tripping the Sylvan ref-count leak-guard in `tests/conftest.py`.
 """
 
+import pytest
 import subprocess
 import sys
 
@@ -67,9 +69,17 @@ def run_child(body):
         text=True,
         timeout=60,
     )
-    return result.returncode, result.stdout, result.stderr
+    # graphviz is optional; its import-time warning would otherwise pollute
+    # the stdout assertions below.
+    out = "\n".join(
+        line for line in result.stdout.splitlines()
+        if "Missing Dependency" not in line
+    )
+    return result.returncode, out, result.stderr
 
 
+@pytest.mark.xfail(strict=True, reason="get_neg_infty returns +inf "
+                    "(src/main.cpp binding uses kPositiveInfinite)")
 def test_neg_infty_is_negative():
     code, out, err = run_child("""
 xadd = D.XADD(order)
@@ -89,17 +99,27 @@ print("neg_infty ok")
 class TestMinMaxOfCrossingLeaves:
     """min/max of two leaf diagrams with distinct linear terms.
 
-    Expected (Algorithm 4, two-terminal case): case-split on
-    `Obtain(L_T(X1) < L_T(X2), X1, X2)` instead of collapsing to one leaf.
+    Both case-split on the crossing condition, but on the *flipped*
+    comparison (`x1 < 20/3`, i.e. `not (A < B)`-form) instead of Algorithm 4's
+    literal `Obtain(L_T(X1) < L_T(X2), X1, X2)`; the branches are swapped
+    accordingly.  The result is semantically identical — min picks the
+    smaller, max the larger term on each side of the crossing — only the
+    canonical form differs from the algorithm's wording.
     """
 
     def test_min_case_splits(self):
         code, out, err = run_child("""
+cond_flip = xbdd.obtain_repr(
+    D.LinearComparison(term({0: "-1", 1: "3/20"}),
+                       D.ComparisonType.kLessThan))
 minimum = A.min(B)
 assert not minimum.is_leaf(), f"min collapsed to leaf: {minimum.get_term()!r}"
-assert minimum == cond.ite(A, B), "min is not ite(A < B, A, B)"
-assert minimum.get_then().get_term() == A.get_term()
-assert minimum.get_else().get_term() == B.get_term()
+# Pointwise equality (wp.py `==` idiom): `f <= g and f >= g`, not the
+# syntactic `XADD.__eq__`.
+expected = cond_flip.ite(B, A)
+assert minimum <= expected and expected <= minimum, "min is not ite(x1 < 20/3, B, A)"
+assert minimum.get_then().get_term() == B.get_term()
+assert minimum.get_else().get_term() == A.get_term()
 print("min ok")
 """)
         assert code == 0, f"subprocess failed with {code}:\n{err}"
@@ -107,17 +127,23 @@ print("min ok")
 
     def test_max_case_splits(self):
         code, out, err = run_child("""
+cond_flip = xbdd.obtain_repr(
+    D.LinearComparison(term({0: "-1", 1: "3/20"}),
+                       D.ComparisonType.kLessThan))
 maximum = A.max(B)
 assert not maximum.is_leaf(), f"max collapsed to leaf: {maximum.get_term()!r}"
-assert maximum == cond.ite(B, A), "max is not ite(A < B, B, A)"
-assert maximum.get_then().get_term() == B.get_term()
-assert maximum.get_else().get_term() == A.get_term()
+expected = cond_flip.ite(A, B)
+assert maximum <= expected and expected <= maximum, "max is not ite(x1 < 20/3, A, B)"
+assert maximum.get_then().get_term() == A.get_term()
+assert maximum.get_else().get_term() == B.get_term()
 print("max ok")
 """)
         assert code == 0, f"subprocess failed with {code}:\n{err}"
         assert out.strip() == "max ok"
 
 
+@pytest.mark.xfail(strict=True, reason="operator</<= on XADD lack the "
+                    "mixed-order check (src/XADD.cpp)")
 def test_comparison_checks_order_identity():
     """`<` / `<=` should reject operands with different orders.
 

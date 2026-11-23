@@ -19,7 +19,11 @@ Domain notes (mirroring `tests/test_xbdd.py`):
 Known quirks of the C++ layer (asserted as current behavior, not
 specification):
 - `XADD.__eq__` compares variable-order *identity* plus the underlying
-  MTBDD, like `XBDD.__eq__`.
+  MTBDD, like `XBDD.__eq__`; diagram-level semantic equality is asserted
+  via `pointwise_equal` (`f <= g` and `f >= g`, the idiom of wp.py's `==`
+  case), which aligns differing case splits via the comparison histories.
+  Note the SMT backend decides over non-negative integers, so thresholds
+  like `x3 < 1` and `x3 < 1/2` are interchangeable.
 - `prune` / `prune_full` and `get_prunes` semantics on diagrams with
   undefined leaves are murky, so those are only checked lightly.
 - `get_neg_infty` is bound incorrectly (it also produces positive
@@ -63,6 +67,15 @@ def make_node(order):
     xadd = ddsolve.XADD(order)
     cond = make_cond(order)
     return cond.ite(xadd.get_one(), xadd.get_zero())
+
+
+def pointwise_equal(f, g):
+    """Semantic equality of two XADDs, following wp.py's `==` case: two
+    diagrams represent the same function iff `f <= g` and `f >= g` both
+    hold.  (`XADD.__eq__` itself only compares syntactically — order
+    identity plus the underlying MTBDD.)
+    """
+    return bool((f <= g) and (f >= g))
 
 
 class TestConstruction:
@@ -158,8 +171,8 @@ class TestArithmetic:
         xadd = ddsolve.XADD(variable_order[0])
         one = xadd.get_one()
         two = xadd.get_term(term((0, 2)))
-        assert one + one == two
-        assert two - one == one
+        assert pointwise_equal(one + one, two)
+        assert pointwise_equal(two - one, one)
 
     def test_add_node(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
@@ -173,7 +186,7 @@ class TestArithmetic:
         a = xadd.get_term(term((0, 1), (3, -1)))   # 1 - x3/10... c=-1 here
         b = xadd.get_term(term((3, 1)))
         # (1 - x3) + x3 = 1
-        assert a + b == xadd.get_one()
+        assert pointwise_equal(a + b, xadd.get_one())
 
     def test_sub_node(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
@@ -200,8 +213,8 @@ class TestMinMax:
     def test_max_constants(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
         one, two = xadd.get_one(), xadd.get_term(term((0, 2)))
-        assert one.max(two) == two
-        assert two.min(one) == one
+        assert pointwise_equal(one.max(two), two)
+        assert pointwise_equal(two.min(one), one)
 
     def test_max_min_pointwise(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
@@ -264,6 +277,52 @@ class TestComparisonOps:
         assert f <= g
         assert not (f < g)
 
+    def test_pointwise_equality(self, variable_order):
+        """Pointwise equality: `f == g` iff `f <= g` and `f >= g` (wp.py)."""
+        xadd = ddsolve.XADD(variable_order[0])
+        one, zero = xadd.get_one(), xadd.get_zero()
+        cond = make_cond(variable_order[0])
+        f = cond.ite(one, zero)
+        # A diagram is pointwise equal to itself and to a rebuild.
+        assert pointwise_equal(f, f)
+        assert pointwise_equal(f, cond.ite(one, zero))
+        # A different function on the same structure is not equal.
+        g = cond.ite(xadd.get_term(term((0, 2))), zero)
+        assert not pointwise_equal(f, g)
+        # Crossing leaf terms: neither `a <= b` nor `b <= a` holds.
+        a = xadd.get_term(term((0, 1), (3, -1)))
+        b = xadd.get_term(term((3, 1)))
+        assert not pointwise_equal(a, b)
+
+    def test_pointwise_equality_across_canonical_forms(self, variable_order):
+        """Pointwise equality aligns diagrams with different case splits.
+
+        `min(1 - x3, x3)` splits on `-1 + 2*x3 < 0`; the same function can
+        be written with the equivalent threshold `-1/2 + x3 < 0`, which
+        becomes a *different* sylvan variable.  The histories threaded
+        through the comparison align the two case splits, so the diagrams
+        compare pointwise-equal despite being syntactically distinct.
+        """
+        xadd = ddsolve.XADD(variable_order[0])
+        a = xadd.get_term(term((0, 1), (3, -1)))   # 1 - x3
+        b = xadd.get_term(term((3, 1)))            # x3
+        f = a.min(b)                               # split on -1 + 2*x3 < 0
+        cond = ddsolve.XBDD(variable_order[0]).obtain_repr(
+            ddsolve.LinearComparison(term((3, 1), (0, "-1/2")),
+                                     ddsolve.ComparisonType.kLessThan))
+        g = cond.ite(b, a)                         # split on -1/2 + x3 < 0
+        assert f != g
+        assert pointwise_equal(f, g)
+
+        # Negative control: threshold `x3 < 2` differs at x3 = 1, where
+        # min(1 - x3, x3) = 0 but `x3` gives 1 (the failure witness).
+        cond2 = ddsolve.XBDD(variable_order[0]).obtain_repr(
+            ddsolve.LinearComparison(term((3, 1), (0, "-2")),
+                                     ddsolve.ComparisonType.kLessThan))
+        h = cond2.ite(b, a)
+        assert not pointwise_equal(h, f)
+        assert not pointwise_equal(f, h)
+
     def test_equality(self, variable_order):
         node = make_node(variable_order[0])
         assert node == node
@@ -281,13 +340,14 @@ class TestScale:
     def test_scale_half(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
         two = xadd.get_term(term((0, 2)))
-        assert two.scale("1/2") == xadd.get_one()
+        assert pointwise_equal(two.scale("1/2"), xadd.get_one())
 
     def test_scale_leaf_term(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
         a = xadd.get_term(term((0, 1), (3, -1)))
         scaled = a.scale("2")
-        assert scaled == xadd.get_term(term((0, 2), (3, -2)))
+        assert pointwise_equal(scaled,
+                               xadd.get_term(term((0, 2), (3, -2))))
 
     def test_invalid_scalar_raises(self, variable_order):
         node = make_node(variable_order[0])
@@ -302,20 +362,20 @@ class TestUndefinedToZero:
         cond = make_cond(variable_order[0])
         partial = cond.ite(one, xadd.get_undefined())
         total = partial.undefined_to_zero()
-        assert total == cond.ite(one, xadd.get_zero())
+        assert pointwise_equal(total, cond.ite(one, xadd.get_zero()))
         assert total.get_else().get_term() == ddsolve.LinearTerm([])
         assert not total.get_else().is_false()
 
     def test_noop_without_undefined(self, variable_order):
         node = make_node(variable_order[0])
-        assert node.undefined_to_zero() == node
+        assert pointwise_equal(node.undefined_to_zero(), node)
 
 
 class TestPrune:
     def test_noop_on_fully_defined(self, variable_order):
         node = make_node(variable_order[0])
-        assert node.prune() == node
-        assert node.prune_full() == node
+        assert pointwise_equal(node.prune(), node)
+        assert pointwise_equal(node.prune_full(), node)
 
     def test_returns_xadd_with_same_order(self, variable_order):
         part = (make_cond(variable_order[0])
@@ -329,7 +389,7 @@ class TestPrune:
         xadd = ddsolve.XADD(variable_order[0])
         zero = xadd.get_zero()
         cond = make_cond(variable_order[0])
-        assert cond.ite(zero, zero) == zero
+        assert pointwise_equal(cond.ite(zero, zero), zero)
 
 
 class TestSupportAndPrunes:
@@ -401,7 +461,7 @@ class TestSubstitute:
 
     def test_substitute_identity(self, variable_order):
         node = make_node(variable_order[0])
-        assert node.substitute(3, term((3, 1))) == node
+        assert pointwise_equal(node.substitute(3, term((3, 1))), node)
 
     def test_substitute_rewrites_leaf_terms(self, variable_order):
         # Substitution reaches *inside* leaf terms: 1 - x3 with x3 := x3/20
@@ -411,10 +471,10 @@ class TestSubstitute:
         sub = a.substitute(3, term((3, 1)))
         expected = xadd.get_term(term((0, 1), (3, -1)))
         # Identity substitution keeps the term.
-        assert sub == expected
+        assert pointwise_equal(sub, expected)
         # A real rewrite: x3 := 2*x3.
         sub2 = a.substitute(3, term((3, 2)))
-        assert sub2 == xadd.get_term(term((0, 1), (3, -2)))
+        assert pointwise_equal(sub2, xadd.get_term(term((0, 1), (3, -2))))
 
 
 class TestIte:
@@ -686,7 +746,9 @@ class TestSmtUndefinedToZero:
 class TestSmtPrune:
     def test_noop_on_node(self):
         node = make_smt_xadd(ddsolve.SmtVariableOrder())
-        assert node.prune() == node
+        pruned = node.prune()
+        # Pointwise equality (wp.py `==` idiom) instead of syntactic `==`.
+        assert pruned <= node and node <= pruned
 
     def test_returns_xadd_with_same_order(self):
         node = make_smt_xadd(ddsolve.SmtVariableOrder())
