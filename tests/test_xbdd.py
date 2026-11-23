@@ -6,7 +6,7 @@ construction, `to_dot`, `get_true`, `get_false`, `obtain_repr`, `get_then`,
 `get_order`, `substitute`, `get_support`, `ite` (XBDD and XADD overloads),
 `==`, `&`, `|` and `~`.
 
-Domain notes (derived from `src/VariableOrder.hpp` and `src/ddsolve/parser.py`):
+Domain notes:
 - `Product(0, c)` represents the literal constant `c`; variable id 0 is the
   constant carrier, `Product(v, c)` with `v > 0` is the term `c * x_v`.
 - Variables are non-negative integers, so some comparisons are decided

@@ -192,7 +192,7 @@ class TestArithmetic:
 
     def test_add_leaf_terms(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
-        a = xadd.get_term(term((0, 1), (3, -1)))   # 1 - x3/10... c=-1 here
+        a = xadd.get_term(term((0, 1), (3, -1)))   # 1 - x3
         b = xadd.get_term(term((3, 1)))
         # (1 - x3) + x3 = 1
         assert pointwise_equal(a + b, xadd.get_one())
@@ -253,8 +253,6 @@ class TestMinMax:
         the *flipped* comparison (`x3 < 20/3`, the `not (A < B)` form)
         with swapped branches — semantically identical, only the canonical
         form differs from the algorithm's wording.
-
-        (Relocated from tests/test_xadd_quirks.py.)
         """
         xadd = ddsolve.XADD(variable_order[0])
         a = xadd.get_term(term((0, 1), (3, "-1/10")))   # 1 - x3/10
@@ -514,8 +512,6 @@ class TestSubstitute:
         assert pointwise_equal(node.substitute(3, term((3, 1))), node)
 
     def test_substitute_rewrites_leaf_terms(self, variable_order):
-        # Substitution reaches *inside* leaf terms: 1 - x3 with x3 := x3/20
-        # becomes 1 - x3/200.
         xadd = ddsolve.XADD(variable_order[0])
         a = xadd.get_term(term((0, 1), (3, -1)))
         sub = a.substitute(3, term((3, 1)))
