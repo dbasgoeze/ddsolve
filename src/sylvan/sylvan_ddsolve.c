@@ -715,12 +715,12 @@ VOID_TASK_4(sylvan_LinearTerm_op_minmax_gather, MTBDD, a, MTBDD, b, MTBDD,
   if (la && lb) {
     if (mtbdd_gettype(a) == kLinearTerm_type &&
         mtbdd_gettype(b) == kLinearTerm_type) {
-      if (CALL(sylvan_LinearTerm_op_compare, a, b, history,
-               COMPARISONTYPE_LESS_THAN,
-               LinearMinMaxHelper_get_order(handle)) &&
-          CALL(sylvan_LinearTerm_op_compare, b, a, history,
-               COMPARISONTYPE_LESS_THAN,
-               LinearMinMaxHelper_get_order(handle))) {
+      if (!!CALL(sylvan_LinearTerm_op_compare, a, b, history,
+                 COMPARISONTYPE_LESS_THAN,
+                 LinearMinMaxHelper_get_order(handle)) ==
+          !!CALL(sylvan_LinearTerm_op_compare, b, a, history,
+                 COMPARISONTYPE_LESS_THAN,
+                 LinearMinMaxHelper_get_order(handle))) {
         LinearTermHandle ah = (LinearTermHandle)mtbdd_getvalue(a);
         LinearTermHandle bh = (LinearTermHandle)mtbdd_getvalue(b);
 
@@ -818,9 +818,6 @@ TASK_5(MTBDD, sylvan_LinearTerm_op_minmax_transform, MTBDD, a, MTBDD, b, MTBDD,
         result = min ? a : b;
       } else if (a_greater && !a_less) {
         result = min ? b : a;
-      } else if (!a_greater && !a_less) {
-        // a == b? Or not reduced?
-        result = a;
       } else {
         LinearTermHandle ah = (LinearTermHandle)mtbdd_getvalue(a);
         LinearTermHandle bh = (LinearTermHandle)mtbdd_getvalue(b);
