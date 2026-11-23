@@ -18,6 +18,9 @@ markers = ["slow: full program verification tests that can take a long time (run
 [dependency-groups]
 dev = ["pytest"]
 
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { dir = "src" }]
+
 [tool.scikit-build]
 wheel.packages = []
 wheel.py-api = "cp312"
