@@ -1,14 +1,14 @@
 """Tests for the Python-exposed methods of `ddsolve.XADD`.
 
-Covers every method/operator bound to the `XADD` class in `src/main.cpp`:
-construction, `to_dot`, the constant factories (`get_undefined`, `get_zero`,
-`get_one`, `get_infty`, `get_neg_infty`), `get_term` (both overloads),
-`get_then`, `get_else`, `get_comparison`, `is_leaf`, `is_true`, `is_false`,
-`get_nodecount`, `with_order`, `get_order`, `substitute`, `prune`,
-`prune_full`, `max`, `min`, `get_support`, `get_prunes`,
-`undefined_to_zero`, `scale`, the comparison operators `==`, `<=`, `<`,
-the arithmetic operators `+` and `-`, and `XBDD * XADD` (selector product,
-covered in detail in `tests/test_xbdd.py`).
+Covers every method/operator of the `XADD` class: construction, `to_dot`,
+the constant factories (`get_undefined`, `get_zero`, `get_one`, `get_infty`,
+`get_neg_infty`), `get_term` (both overloads), `get_then`, `get_else`,
+`get_comparison`, `is_leaf`, `is_true`, `is_false`, `get_nodecount`,
+`with_order`, `get_order`, `substitute`, `prune`, `prune_full`, `max`,
+`min`, `get_support`, `get_prunes`, `undefined_to_zero`, `scale`, the
+comparison operators `==`, `<=`, `<`, the arithmetic operators `+` and
+`-`, and `XBDD * XADD` (selector product, covered in detail in
+`tests/test_xbdd.py`).
 
 Domain notes (mirroring `tests/test_xbdd.py`):
 - `Product(0, c)` is the literal constant `c`; `Product(v, c)` with `v > 0`
@@ -20,10 +20,10 @@ Known quirks of the C++ layer (asserted as current behavior, not
 specification):
 - `XADD.__eq__` compares variable-order *identity* plus the underlying
   MTBDD, like `XBDD.__eq__`; diagram-level semantic equality is asserted
-  via `pointwise_equal` (`f <= g` and `f >= g`, the idiom of wp.py's `==`
-  case), which aligns differing case splits via the comparison histories.
-  Note the SMT backend decides over non-negative integers, so thresholds
-  like `x3 < 1` and `x3 < 1/2` are interchangeable.
+  via `pointwise_equal` (`f <= g` and `f >= g`), which aligns differing
+  case splits via the comparison histories.  Note the SMT backend decides
+  over non-negative integers, so thresholds like `x3 < 1` and `x3 < 1/2`
+  are interchangeable.
 - `prune` / `prune_full` and `get_prunes` semantics on diagrams with
   undefined leaves are murky, so those are only checked lightly.
 - For Smt diagrams: `undefined_to_zero` inserts the *default-constructed*
@@ -41,39 +41,14 @@ import sys
 import pytest
 
 import ddsolve
-
-GT = ddsolve.ComparisonType.kGreaterThan
-
-
-def term(*products):
-    """Build a LinearTerm from (variable, coefficient) pairs."""
-    return ddsolve.LinearTerm([ddsolve.Product(v, c) for v, c in products])
-
-
-def gt_one(var=3, k=1):
-    """The comparison `x_var - k > 0` (non-trivially decidable)."""
-    return ddsolve.LinearComparison(term((var, 1), (0, -k)), GT)
-
-
-def make_cond(order):
-    """The XBDD condition `x3 - 1 > 0` (canonicalized to `1 - x3 < 0`)."""
-    return ddsolve.XBDD(order).obtain_repr(gt_one())
+from helpers import (LT, make_cond, make_smt_xadd, pointwise_equal,
+                     smt_cond, term)
 
 
 def make_node(order):
     """The XADD `(x3 - 1 > 0) ? 1 : 0` — then leaf `1`, else leaf `0`."""
     xadd = ddsolve.XADD(order)
-    cond = make_cond(order)
-    return cond.ite(xadd.get_one(), xadd.get_zero())
-
-
-def pointwise_equal(f, g):
-    """Semantic equality of two XADDs, following wp.py's `==` case: two
-    diagrams represent the same function iff `f <= g` and `f >= g` both
-    hold.  (`XADD.__eq__` itself only compares syntactically — order
-    identity plus the underlying MTBDD.)
-    """
-    return bool((f <= g) and (f >= g))
+    return make_cond(order).ite(xadd.get_one(), xadd.get_zero())
 
 
 class TestConstruction:
@@ -265,7 +240,7 @@ class TestMinMax:
         cond_flip = ddsolve.XBDD(variable_order[0]).obtain_repr(
             ddsolve.LinearComparison(term((0, "-1"), (3, "3/20")),
                                      ddsolve.ComparisonType.kLessThan))
-        # Pointwise equality (wp.py `==` idiom), plus the branch layout.
+        # Pointwise equality, plus the branch layout.
         assert pointwise_equal(minimum, cond_flip.ite(b, a))
         assert pointwise_equal(maximum, cond_flip.ite(a, b))
         assert minimum.get_then().get_term() == b.get_term()
@@ -316,7 +291,7 @@ class TestComparisonOps:
         assert not (f < g)
 
     def test_pointwise_equality(self, variable_order):
-        """Pointwise equality: `f == g` iff `f <= g` and `f >= g` (wp.py)."""
+        """Pointwise equality: `f == g` iff `f <= g` and `f >= g`."""
         xadd = ddsolve.XADD(variable_order[0])
         one, zero = xadd.get_one(), xadd.get_zero()
         cond = make_cond(variable_order[0])
@@ -440,6 +415,90 @@ class TestPrune:
         assert pointwise_equal(cond.ite(zero, zero), zero)
 
 
+def node_comparisons(dd):
+    """All comparisons of the decision nodes reachable from `dd`.
+
+    Plain DFS without memoization; fine for the tiny diagrams used here.
+    """
+    comps = []
+    stack = [dd]
+    while stack:
+        node = stack.pop()
+        if node.is_leaf():
+            continue
+        comps.append(node.get_comparison())
+        stack.append(node.get_then())
+        stack.append(node.get_else())
+    return comps
+
+
+def max_with_trivial_pair(order, sat):
+    """max() of two XADDs with a trivially decidable leaf-pair comparison.
+
+    `max`/`min` register leaf-pair comparisons directly in the order
+    (bypassing `obtain_repr`, which collapses trivial comparisons), so the
+    pair comparison survives as a decision node of the result whenever the
+    combined path history is UNSAT.  Here `a` tests `x3 < 5` (then -> `hi`,
+    else -> `lo`) and `b` tests `x3 < 1` (then -> `hi`, else -> `x3`); the
+    cross path `x3 >= 5` with `x3 < 1` is UNSAT, so both directions of the
+    leaf pair decide unsat.
+    """
+    # The pair-comparison orientation depends on leaf interning order (the
+    # later-interned leaf becomes the lhs), so each case fixes its constant
+    # leaves explicitly: (first-interned, second-interned, pair-lhs-minus-
+    # pair-rhs constant).  Keeping the constants obscure avoids clashing
+    # with constants interned by other tests.
+    first, second, constant = (205, 202, -3) if sat else (103, 105, 2)
+    xadd = ddsolve.XADD(order)
+    hi = xadd.get_term(term((0, first)))    # interned first
+    lo = xadd.get_term(term((0, second)))   # interned second -> lhs
+    expected = ddsolve.LinearComparison(term((0, constant)), LT)
+    leafx3 = xadd.get_term(term((3, 1)))
+    cond_a = ddsolve.XBDD(order).obtain_repr(
+        ddsolve.LinearComparison(term((3, 1), (0, -5)), LT))  # x3 < 5
+    cond_b = ddsolve.XBDD(order).obtain_repr(
+        ddsolve.LinearComparison(term((3, 1), (0, -1)), LT))  # x3 < 1
+    a = cond_a.ite(hi, lo)
+    b = cond_b.ite(hi, leafx3)
+    m = a.max(b)
+    assert expected in order.get_comparisons()
+    return m, expected
+
+
+class TestDecideTrivialCheckShortCircuit:
+    """Pin the bypass behavior closest to an unreachable short-circuit.
+
+    Trivially decidable comparisons never become diagram nodes through
+    `obtain_repr` (they collapse to constant leaves), but `max`/`min`
+    register leaf-pair comparisons directly, so they can survive as
+    decision nodes.  These tests pin that behavior, and that `prune_full`
+    drops the pair node's unsat-decided paths.
+    """
+
+    def test_trivially_unsat_pair_comparison(self, variable_order):
+        order = variable_order[0]
+        m, trivial = max_with_trivial_pair(order, sat=False)
+        # The trivially unsat pair comparison `105 < 103` is a decision
+        # node of the max() result and its paths are decided unsat, so
+        # prune_full drops them.
+        assert trivial in node_comparisons(m)
+        assert m.prune_full().get_nodecount() < m.get_nodecount()
+        # The other decide-path entries run without raising.
+        assert m.prune().get_nodecount() > 0
+        assert not m.get_prunes().is_leaf()
+
+    def test_trivially_sat_pair_comparison(self, variable_order):
+        order = variable_order[0]
+        m, trivial = max_with_trivial_pair(order, sat=True)
+        # The trivially sat pair comparison `202 < 205` is a decision
+        # node of the max() result; its (unsat-history) paths are still
+        # decided unsat by the solver and pruned.
+        assert trivial in node_comparisons(m)
+        assert m.prune_full().get_nodecount() < m.get_nodecount()
+        assert m.prune().get_nodecount() > 0
+        assert not m.get_prunes().is_leaf()
+
+
 class TestSupportAndPrunes:
     def test_support_of_constant(self, variable_order):
         xadd = ddsolve.XADD(variable_order[0])
@@ -536,6 +595,23 @@ class TestIte:
         assert joined.get_then().get_term() == a.get_term()
         assert joined.get_else().get_term() == b.get_term()
 
+    def test_mixed_orders_raise(self):
+        """XBDD::ite(XADD, XADD) throws on order mismatch."""
+        order1 = ddsolve.VariableOrder()
+        order2 = ddsolve.VariableOrder()
+        cond = ddsolve.XBDD(order1).obtain_repr(
+            ddsolve.LinearComparison(term((0, 1), (3, -1)),
+                                     ddsolve.ComparisonType.kLessThan)
+        )
+        then_ = ddsolve.XADD(order1).get_one()
+        else_ = ddsolve.XADD(order1).get_zero()
+        # XADD from a *different* order
+        wrong_then = ddsolve.XADD(order2).get_one()
+        with pytest.raises(ValueError):
+            cond.ite(wrong_then, else_)
+        with pytest.raises(ValueError):
+            cond.ite(then_, wrong_then)
+
 
 class TestToDot:
     def test_returns_dot_string(self, variable_order):
@@ -552,20 +628,6 @@ class TestToDot:
 # ---------------------------------------------------------------------------
 # SmtXADD — same interface, SmtTerm leaves and comparisons.
 # ---------------------------------------------------------------------------
-
-
-def make_smt_xadd(order):
-    """The SmtXADD `(x < 5) ? x : 2*x` over the given order."""
-    xadd = ddsolve.SmtXADD(order)
-    cond = ddsolve.SmtXBDD(order).obtain_repr(
-        ddsolve.SmtComparison(
-            ddsolve.SmtTerm.mk_int_var("x"),
-            ddsolve.SmtTerm.mk_int("5"),
-            ddsolve.ComparisonType.kLessThan,
-        )
-    )
-    x = ddsolve.SmtTerm.mk_int_var("x")
-    return cond.ite(xadd.get_term(x), xadd.get_term(x + x))
 
 
 class TestSmtConstruction:
@@ -609,6 +671,28 @@ class TestSmtTermLeaves:
         b = xadd.get_term(x + x)
         assert (a + b).get_term() == ddsolve.SmtTerm.mk_int("3") * x
         assert (a - b).get_term() == ddsolve.SmtTerm.mk_int("-1") * x
+
+    def test_multiplication(self):
+        """SmtXADD * SmtXADD — basic multiplication."""
+        order = ddsolve.SmtVariableOrder()
+        xadd = ddsolve.SmtXADD(order)
+        x = ddsolve.SmtTerm.mk_int_var("x")
+        a = xadd.get_term(x)
+        b = xadd.get_term(x + x)
+        product = a * b
+        assert type(product) is ddsolve.SmtXADD
+
+    def test_mixed_orders_raise(self):
+        """SmtXADD::operator* throws on order mismatch."""
+        order1 = ddsolve.SmtVariableOrder()
+        order2 = ddsolve.SmtVariableOrder()
+        xadd1 = ddsolve.SmtXADD(order1)
+        xadd2 = ddsolve.SmtXADD(order2)
+        x = ddsolve.SmtTerm.mk_int_var("x")
+        a = xadd1.get_term(x)
+        b = xadd2.get_term(x)
+        with pytest.raises(ValueError):
+            a * b
 
     def test_arithmetic_on_node(self):
         node = make_smt_xadd(ddsolve.SmtVariableOrder())
@@ -667,10 +751,7 @@ class TestSmtMinMax:
         order = ddsolve.SmtVariableOrder()
         xadd = ddsolve.SmtXADD(order)
         x = ddsolve.SmtTerm.mk_int_var("x")
-        cond = ddsolve.SmtXBDD(order).obtain_repr(
-            ddsolve.SmtComparison(x, ddsolve.SmtTerm.mk_int("5"),
-                                  ddsolve.ComparisonType.kLessThan)
-        )
+        cond = smt_cond(order)
         f = cond.ite(xadd.get_term(ddsolve.SmtTerm.mk_int("1")),
                      xadd.get_term(ddsolve.SmtTerm.mk_int("0")))
         g = cond.ite(xadd.get_term(ddsolve.SmtTerm.mk_int("3")),
@@ -698,10 +779,7 @@ class TestSmtComparisonOps:
         order = ddsolve.SmtVariableOrder()
         xadd = ddsolve.SmtXADD(order)
         x = ddsolve.SmtTerm.mk_int_var("x")
-        cond = ddsolve.SmtXBDD(order).obtain_repr(
-            ddsolve.SmtComparison(x, ddsolve.SmtTerm.mk_int("5"),
-                                  ddsolve.ComparisonType.kLessThan)
-        )
+        cond = smt_cond(order)
         f = cond.ite(xadd.get_term(x), xadd.get_term(x + x))
         g = cond.ite(xadd.get_term(ddsolve.SmtTerm.mk_int("3")),
                      xadd.get_term(ddsolve.SmtTerm.mk_int("5")))
@@ -718,6 +796,25 @@ class TestSmtComparisonOps:
         b = make_smt_xadd(ddsolve.SmtVariableOrder())
         assert a == a
         assert a != b  # order identity, as for XADD
+
+    def test_mixed_orders_raise(self):
+        """SmtXADD::operator<, <=, - throw on order mismatch.
+
+        std::invalid_argument is translated to ValueError.
+        """
+        order1 = ddsolve.SmtVariableOrder()
+        order2 = ddsolve.SmtVariableOrder()
+        xadd1 = ddsolve.SmtXADD(order1)
+        xadd2 = ddsolve.SmtXADD(order2)
+        x = ddsolve.SmtTerm.mk_int_var("x")
+        a = xadd1.get_term(x)
+        b = xadd2.get_term(x)  # different order
+        with pytest.raises(ValueError):
+            a < b
+        with pytest.raises(ValueError):
+            a <= b
+        with pytest.raises(ValueError):
+            a - b
 
 
 class TestSmtScale:
@@ -775,13 +872,7 @@ class TestSmtUndefinedToZero:
         # SmtTerm (an empty term), not an arithmetic zero.
         order = ddsolve.SmtVariableOrder()
         xadd = ddsolve.SmtXADD(order)
-        cond = ddsolve.SmtXBDD(order).obtain_repr(
-            ddsolve.SmtComparison(
-                ddsolve.SmtTerm.mk_int_var("x"),
-                ddsolve.SmtTerm.mk_int("5"),
-                ddsolve.ComparisonType.kLessThan,
-            )
-        )
+        cond = smt_cond(order)
         partial = cond.ite(xadd.get_term(ddsolve.SmtTerm.mk_int_var("x")),
                            xadd.get_undefined())
         total = partial.undefined_to_zero()
@@ -793,7 +884,7 @@ class TestSmtPrune:
     def test_noop_on_node(self):
         node = make_smt_xadd(ddsolve.SmtVariableOrder())
         pruned = node.prune()
-        # Pointwise equality (wp.py `==` idiom) instead of syntactic `==`.
+        # Pointwise equality instead of syntactic `==`.
         assert pruned <= node and node <= pruned
 
     def test_returns_xadd_with_same_order(self):
@@ -861,21 +952,190 @@ class TestSmtSelectorProduct:
         # `SmtXBDD * SmtXADD` keeps the XADD value where the condition is
         # true and becomes undefined elsewhere (same as Linear).
         order = ddsolve.SmtVariableOrder()
-        cond = ddsolve.SmtXBDD(order).obtain_repr(
-            ddsolve.SmtComparison(
-                ddsolve.SmtTerm.mk_int_var("x"),
-                ddsolve.SmtTerm.mk_int("5"),
-                ddsolve.ComparisonType.kLessThan,
-            )
-        )
+        cond = smt_cond(order)
         xadd = ddsolve.SmtXADD(order)
         leaf = xadd.get_term(ddsolve.SmtTerm.mk_int_var("x"))
         product = cond * leaf
         assert type(product) is ddsolve.SmtXADD
         assert product == cond.ite(leaf, xadd.get_undefined())
 
+    def test_mixed_orders_raise(self):
+        """SmtXBDD * SmtXADD throws on order mismatch."""
+        order1 = ddsolve.SmtVariableOrder()
+        order2 = ddsolve.SmtVariableOrder()
+        cond = ddsolve.SmtXBDD(order1).obtain_repr(
+            ddsolve.SmtComparison(
+                ddsolve.SmtTerm.mk_int_var("x"),
+                ddsolve.SmtTerm.mk_int("5"),
+                ddsolve.ComparisonType.kLessThan,
+            )
+        )
+        xadd = ddsolve.SmtXADD(order2)  # different order
+        leaf = xadd.get_term(ddsolve.SmtTerm.mk_int_var("x"))
+        with pytest.raises(ValueError):
+            cond * leaf
+
 
 class TestSmtToDot:
     def test_returns_dot_string(self):
         node = make_smt_xadd(ddsolve.SmtVariableOrder())
         assert node.to_dot().startswith('digraph "DD"')
+
+
+# ---------------------------------------------------------------------------
+# LinearTerm repr and scale
+# ---------------------------------------------------------------------------
+
+
+class TestLinearTermRepr:
+    def test_zero_term(self):
+        t = ddsolve.LinearTerm([])
+        assert repr(t) == "0"
+
+    def test_single_term(self):
+        t = ddsolve.LinearTerm([ddsolve.Product(3, 2)])
+        assert repr(t) == "2*x3"
+
+    def test_multi_term(self):
+        t = ddsolve.LinearTerm([
+            ddsolve.Product(0, 1),
+            ddsolve.Product(3, -1),
+        ])
+        assert repr(t) == "1 + -1*x3"
+
+    def test_rational_coefficients(self):
+        t = ddsolve.LinearTerm([
+            ddsolve.Product(1, "3/4"),
+            ddsolve.Product(2, "1/2"),
+        ])
+        assert repr(t) == "3/4*x1 + 1/2*x2"
+
+    def test_infinite_term(self):
+        t = ddsolve.LinearTerm(ddsolve.FinityType.kPositiveInfinite)
+        assert repr(t) == "∞"
+
+    def test_neg_infinite_term(self):
+        t = ddsolve.LinearTerm(ddsolve.FinityType.kNegativeInfinite)
+        assert repr(t) == "-∞"
+
+    def test_iteration(self):
+        """LinearTerm.__iter__ yields the Products in term order."""
+        t = ddsolve.LinearTerm([
+            ddsolve.Product(1, 3),
+            ddsolve.Product(2, "1/2"),
+        ])
+        products = list(t)
+        assert len(products) == 2
+        assert products[0].get_variable() == 1
+        assert products[1].get_variable() == 2
+
+
+class TestLinearTermScale:
+    def test_scale_by_integer(self):
+        t = ddsolve.LinearTerm([ddsolve.Product(3, 2)])
+        scaled = t.scale("3")
+        assert repr(scaled) == "6*x3"
+
+    def test_scale_by_rational(self):
+        t = ddsolve.LinearTerm([ddsolve.Product(1, "2/3")])
+        scaled = t.scale("3/2")
+        assert repr(scaled) == "1*x1"
+
+    def test_scale_zero(self):
+        t = ddsolve.LinearTerm([ddsolve.Product(3, 2), ddsolve.Product(0, 1)])
+        scaled = t.scale("0")
+        assert repr(scaled) == "0"
+
+    def test_scale_negative(self):
+        t = ddsolve.LinearTerm([ddsolve.Product(1, 5)])
+        scaled = t.scale("-1")
+        assert repr(scaled) == "-5*x1"
+
+    def test_scale_infinite(self):
+        t = ddsolve.LinearTerm(ddsolve.FinityType.kPositiveInfinite)
+        scaled = t.scale("2")
+        # Infinite terms are unchanged by scaling
+        assert repr(scaled) == "∞"
+
+    def test_scale_copy_constructed(self):
+        t1 = ddsolve.LinearTerm([ddsolve.Product(1, 3)])
+        t2 = ddsolve.LinearTerm(t1)  # copy constructor
+        scaled = t2.scale("2")
+        assert repr(scaled) == "6*x1"
+
+
+# ---------------------------------------------------------------------------
+# LinearComparison repr
+# ---------------------------------------------------------------------------
+
+
+class TestLinearComparisonRepr:
+    def _mk(self, products, ctype):
+        return ddsolve.LinearComparison(
+            ddsolve.LinearTerm([ddsolve.Product(v, c) for v, c in products]),
+            ctype,
+        )
+
+    def test_equality(self):
+        c = self._mk([(3, 1)], ddsolve.ComparisonType.kEquality)
+        assert "=" in repr(c)
+        assert "0" in repr(c)
+
+    def test_inequality(self):
+        c = self._mk([(3, 1)], ddsolve.ComparisonType.kInequality)
+        assert "!=" in repr(c)
+
+    def test_less_than(self):
+        c = self._mk([(3, -1), (0, 1)], ddsolve.ComparisonType.kLessThan)
+        assert "<" in repr(c)
+
+    def test_less_than_or_equal(self):
+        c = self._mk([(3, 1)], ddsolve.ComparisonType.kLessThanOrEqual)
+        assert "<=" in repr(c)
+
+    def test_greater_than(self):
+        c = self._mk([(3, 1)], ddsolve.ComparisonType.kGreaterThan)
+        assert ">" in repr(c)
+
+    def test_greater_than_or_equal(self):
+        c = self._mk([(3, 1)], ddsolve.ComparisonType.kGreaterThanOrEqual)
+        assert ">=" in repr(c)
+
+    def test_two_term_comparison(self):
+        lhs = ddsolve.LinearTerm([ddsolve.Product(3, 1)])
+        rhs = ddsolve.LinearTerm([ddsolve.Product(0, 5)])
+        c = ddsolve.LinearComparison(lhs, rhs, ddsolve.ComparisonType.kLessThan)
+        # A two-term comparison is normalized to `rhs - lhs < 0`.
+        assert repr(c) == "-5 + 1*x3 < 0"
+
+
+# ---------------------------------------------------------------------------
+# XBDD * XADD (selector product) for LinearTerm
+# ---------------------------------------------------------------------------
+
+
+class TestLinearXBDDMulXADD:
+    """Test XBDD * XADD — the selector product, already covered in
+    test_xbdd.py but re-asserted here for the XADD-side path."""
+
+    def test_selector_product(self, variable_order):
+        xadd = ddsolve.XADD(variable_order[0])
+        one = xadd.get_one()
+        cond = make_cond(variable_order[0])
+        product = cond * one
+        undefined = xadd.get_undefined()
+        assert product == cond.ite(one, undefined)
+
+    def test_selector_product_with_term(self, variable_order):
+        xadd = ddsolve.XADD(variable_order[0])
+        five = xadd.get_term(term((0, 5)))
+        cond = make_cond(variable_order[0])
+        undefined = xadd.get_undefined()
+        product = cond * five
+        # Selector product: then=5, else=undefined
+        assert not product.is_leaf()
+        assert product.get_then().get_term() == five.get_term()
+        assert product.get_else().get_term() is None
+
+
+

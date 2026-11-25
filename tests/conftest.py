@@ -1,8 +1,9 @@
-import pytest
-from pytest import fixture
-import ddsolve
 import gc
 from pathlib import Path
+
+from pytest import fixture
+
+import ddsolve
 
 def pytest_generate_tests(metafunc):
 
@@ -27,6 +28,11 @@ def sylvan_state():
 
 @fixture
 def variable_order(sylvan_state):
+    # The object is kept in a one-element list so that its C++ destructor
+    # runs when the list is cleared (after the yield) rather than when the
+    # fixture-local name is rebound: the autouse `sylvan_state` teardown
+    # (which asserts zero remaining Sylvan refs) runs *before* this
+    # fixture's post-yield code, so nothing may be released there.
     rval = ddsolve.VariableOrder()
     rval = [rval]
     yield rval
