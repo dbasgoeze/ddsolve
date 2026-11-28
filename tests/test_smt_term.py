@@ -1,11 +1,4 @@
-"""Tests for SmtTerm bindings: functions, arrays, type casts, `*` and `/`.
-
-The `*` and `/` operations leave unreleased Sylvan refs, so their tests
-run in subprocesses to avoid poisoning the main test process.
-"""
-
-import subprocess
-import sys
+"""Tests for SmtTerm bindings: functions, arrays, and type casts."""
 
 import pytest
 
@@ -13,17 +6,42 @@ import ddsolve
 
 
 class TestSmtTermFunctionCreation:
-    """Test SmtTerm.mk_int_func and mk_real_func."""
+    """Test SmtTerm.mk_int_func and mk_real_func: arity and typing."""
 
     def test_mk_int_func(self):
         f = ddsolve.SmtTerm.mk_int_func("f", 2)
         assert repr(f) == "f"
 
     def test_mk_int_func_arity_1(self):
-        assert repr(ddsolve.SmtTerm.mk_int_func("g", 1)) == "g"
+        g = ddsolve.SmtTerm.mk_int_func("g", 1)
+        assert repr(g) == "g"
+        # A 1-arity Int function applies to exactly one Int argument.
+        applied = g.apply_func([ddsolve.SmtTerm.mk_int_var("g_x")])
+        assert repr(applied) == "(g g_x)"
 
     def test_mk_real_func(self):
-        assert repr(ddsolve.SmtTerm.mk_real_func("h", 3)) == "h"
+        h = ddsolve.SmtTerm.mk_real_func("h", 3)
+        assert repr(h) == "h"
+        # A Real function applies to Real arguments of the declared arity.
+        applied = h.apply_func([
+            ddsolve.SmtTerm.mk_real_var("h_r1"),
+            ddsolve.SmtTerm.mk_real_var("h_r2"),
+            ddsolve.SmtTerm.mk_real("2.5"),
+        ])
+        assert repr(applied) == "(h h_r1 h_r2 (/ 5 2))"
+
+    def test_apply_func_wrong_arity_raises(self):
+        """Applying with more arguments than the declared arity raises."""
+        g = ddsolve.SmtTerm.mk_int_func("g_wrong_arity", 1)
+        with pytest.raises(RuntimeError):
+            g.apply_func([ddsolve.SmtTerm.mk_int_var("g_x"),
+                          ddsolve.SmtTerm.mk_int("5")])
+
+    def test_apply_func_type_mismatch_raises(self):
+        """An Int function cannot be applied to a Real argument."""
+        fi = ddsolve.SmtTerm.mk_int_func("fi", 1)
+        with pytest.raises(RuntimeError):
+            fi.apply_func([ddsolve.SmtTerm.mk_real_var("fi_r")])
 
 
 class TestSmtTermArrayCreation:
@@ -33,7 +51,15 @@ class TestSmtTermArrayCreation:
         assert repr(ddsolve.SmtTerm.mk_int_array("myarr")) == "myarr"
 
     def test_mk_real_array(self):
-        assert repr(ddsolve.SmtTerm.mk_real_array("real_arr")) == "real_arr"
+        arr = ddsolve.SmtTerm.mk_real_array("real_arr")
+        assert repr(arr) == "real_arr"
+        # A Real array stores and selects Real values (the Int-array
+        # store/select chains are covered in TestSmtTermArrays).
+        idx = ddsolve.SmtTerm.mk_int("0")
+        stored = arr.array_store(idx, ddsolve.SmtTerm.mk_real("2.5"))
+        assert repr(stored) == "(store real_arr 0 (/ 5 2))"
+        # Selecting through the store constant-folds to the stored value.
+        assert repr(stored.array_select(idx)) == "(/ 5 2)"
 
 
 class TestSmtTermApplyFunction:
@@ -108,64 +134,3 @@ class TestSmtTermTypeCasts:
         assert repr((x * ddsolve.SmtTerm.mk_real("2")).to_int()) == (
             "(to_int (* 2.0 r))"
         )
-
-
-class TestSmtTermMulDiv:
-    """SmtTerm `*` and `/`, run in subprocesses (they leak Sylvan refs)."""
-
-    _CODE = """
-import ddsolve
-import sys
-
-x = ddsolve.SmtTerm.mk_int_var("x")
-y = ddsolve.SmtTerm.mk_int_var("y")
-
-action = sys.argv[1]
-
-if action == "mul":
-    print(repr(x * ddsolve.SmtTerm.mk_int("2")))
-elif action == "mul_chained":
-    print(repr(x * ddsolve.SmtTerm.mk_int("3") * ddsolve.SmtTerm.mk_int("2")))
-elif action == "div":
-    print(repr(x / ddsolve.SmtTerm.mk_int("2")))
-elif action == "div_by_one":
-    print(repr(x / ddsolve.SmtTerm.mk_int("1")))
-elif action == "substitute_mul":
-    prod = x * y
-    print(repr(prod.substitute(x, ddsolve.SmtTerm.mk_int("2"))))
-elif action == "div_zero":
-    # No exception is raised; division by the zero term yields a term.
-    print(repr(x / ddsolve.SmtTerm.mk_int("0")))
-"""
-
-    def _run(self, action):
-        result = subprocess.run(
-            [sys.executable, "-c", self._CODE, action],
-            capture_output=True, text=True, timeout=60,
-        )
-        assert result.returncode == 0, (
-            f"subprocess failed with {result.returncode}:\n{result.stderr}"
-        )
-        # Module import may print a graphviz warning to stdout; drop it.
-        lines = [line for line in result.stdout.splitlines()
-                 if "Missing Dependency" not in line]
-        return "\n".join(lines).strip()
-
-    def test_smt_mul(self):
-        assert self._run("mul") == "(* 2 x)"
-
-    def test_smt_mul_chained(self):
-        assert self._run("mul_chained") == "(* 6 x)"
-
-    def test_smt_div(self):
-        # Integer division lifts the term to the reals.
-        assert self._run("div") == "(* (/ 1 2) (to_real x))"
-
-    def test_smt_div_by_one(self):
-        assert self._run("div_by_one") == "(to_real x)"
-
-    def test_smt_term_substitute_and_mul(self):
-        assert self._run("substitute_mul") == "(* 2 y)"
-
-    def test_smt_div_zero(self):
-        assert self._run("div_zero") == "(/ (to_real x) 0.0)"

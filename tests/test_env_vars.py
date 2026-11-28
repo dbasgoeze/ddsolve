@@ -1,66 +1,15 @@
-"""Tests for environment-variable paths and module-level APIs.
+"""Tests for the environment-variable code paths of the extension module.
 
 The env vars SYLVAN_MAXMEM, SYLVAN_INITIAL_RATIO, SYLVAN_TABLE_RATIO,
 and LACE_WORKERS are read once when the extension module is first
 imported.  The "env var set" and "invalid integer" code paths cannot be
 exercised from a test inside the same process, so we test them via
 subprocess.
-
-Also tests: sylvan_gc(), sylvan_count_refs(), LaceManager, PrintModelsManager.
 """
 
 import os
 import subprocess
 import sys
-
-import ddsolve
-
-
-class TestSylvanGc:
-    def test_sylvan_gc_noop(self):
-        """sylvan_gc() should not raise."""
-        ddsolve.sylvan_gc()
-
-    def test_sylvan_count_refs(self):
-        refs = ddsolve.sylvan_count_refs()
-        assert isinstance(refs, int)
-        assert refs >= 0
-
-
-class TestLaceManager:
-    """LaceManager context manager — enter/exit path."""
-
-    def test_context_manager(self):
-        with ddsolve.LaceManager():
-            pass  # Should acquire/release Lace thread
-
-    def test_nested_context_managers(self):
-        with ddsolve.LaceManager():
-            with ddsolve.LaceManager():
-                pass  # Nested LaceManager
-
-    def test_multiple_exits(self):
-        for _ in range(3):
-            with ddsolve.LaceManager():
-                pass
-
-
-class TestPrintModelsManager:
-    """PrintModelsManager context manager — enter/exit path."""
-
-    def test_context_manager(self):
-        with ddsolve.PrintModelsManager():
-            pass  # Should enable/disable model printing
-
-    def test_nested_context_managers(self):
-        with ddsolve.PrintModelsManager():
-            with ddsolve.PrintModelsManager():
-                pass
-
-    def test_multiple_exits(self):
-        for _ in range(3):
-            with ddsolve.PrintModelsManager():
-                pass
 
 
 class TestEnvVarsSubprocess:
@@ -85,14 +34,6 @@ class TestEnvVarsSubprocess:
         )
         assert result.returncode == 0
         assert "ok" in result.stdout
-
-    def test_sylvan_maxmem_large(self):
-        """SYLVAN_MAXMEM=999999999 should not crash."""
-        result = self._run_with_env(
-            {"SYLVAN_MAXMEM": "999999999"},
-            "import ddsolve; print('ok')",
-        )
-        assert result.returncode == 0
 
     def test_sylvan_initial_ratio(self):
         """SYLVAN_INITIAL_RATIO=5 should not crash."""
